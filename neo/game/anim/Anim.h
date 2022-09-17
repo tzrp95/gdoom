@@ -38,12 +38,13 @@ If you have questions concerning this license or the applicable additional terms
 //
 // animation channels
 // these can be changed by modmakers and licensees to be whatever they need.
+//
 const int ANIM_NumAnimChannels		= 5;
 const int ANIM_MaxAnimsPerChannel	= 3;
 const int ANIM_MaxSyncedAnims		= 3;
 
 //
-// animation channels.  make sure to change script/doom_defs.script if you add any channels, or change their order
+// animation channels. make sure to change script/doom_defs.script if you add any channels, or change their order
 //
 const int ANIMCHANNEL_ALL			= 0;
 const int ANIMCHANNEL_TORSO			= 1;
@@ -51,7 +52,9 @@ const int ANIMCHANNEL_LEGS			= 2;
 const int ANIMCHANNEL_HEAD			= 3;
 const int ANIMCHANNEL_EYELIDS		= 4;
 
+//
 // for converting from 24 frames per second to milliseconds
+//
 ID_INLINE int FRAME2MS( int framenum ) {
 	return ( framenum * 1000 ) / 24;
 }
@@ -65,11 +68,11 @@ class idSaveGame;
 class idRestoreGame;
 
 typedef struct {
-	int		cycleCount;	// how many times the anim has wrapped to the begining (0 for clamped anims)
-	int		frame1;
-	int		frame2;
-	float	frontlerp;
-	float	backlerp;
+	int						cycleCount;	// how many times the anim has wrapped to the begining (0 for clamped anims)
+	int						frame1;
+	int						frame2;
+	float					frontlerp;
+	float					backlerp;
 } frameBlend_t;
 
 typedef struct {
@@ -86,7 +89,7 @@ typedef struct {
 } jointInfo_t;
 
 //
-// joint modifier modes.  make sure to change script/doom_defs.script if you add any, or change their order.
+// joint modifier modes. make sure to change script/doom_defs.script if you add any, or change their order.
 //
 typedef enum {
 	JOINTMOD_NONE,				// no modification
@@ -152,7 +155,12 @@ typedef enum {
 	FC_ENABLE_LEG_IK,
 	FC_DISABLE_LEG_IK,
 	FC_RECORDDEMO,
-	FC_AVIGAME
+	FC_AVIGAME, 
+	FC_LAUNCH_PROJECTILE,
+	FC_TRIGGER_FX,
+	FC_START_EMITTER,
+	FC_STOP_EMITTER,
+	FC_FOOTSTEPFX,
 } frameCommandType_t;
 
 typedef struct {
@@ -178,7 +186,6 @@ typedef struct {
 	bool					ai_no_turn					: 1;
 	bool					anim_turn					: 1;
 } animFlags_t;
-
 
 /*
 ==============================================================================================
@@ -289,6 +296,9 @@ private:
 	idList<frameCommand_t>		frameCommands;
 	animFlags_t					flags;
 
+	// configurable playback rate (Quake 4)
+	float						rate;
+
 public:
 								idAnim();
 								idAnim( const idDeclModelDef *modelDef, const idAnim *anim );
@@ -306,15 +316,31 @@ public:
 	bool						GetOrigin( idVec3 &offset, int animNum, int time, int cyclecount ) const;
 	bool						GetOriginRotation( idQuat &rotation, int animNum, int currentTime, int cyclecount ) const;
 	bool						GetBounds( idBounds &bounds, int animNum, int time, int cyclecount ) const;
-	const char					*AddFrameCommand( const class idDeclModelDef *modelDef, int framenum, idLexer &src, const idDict *def );
+								// added framelists support (Quake 4)
+	const char					*AddFrameCommand( const class idDeclModelDef *modelDef, const idList<int> &frames, idLexer &src, const idDict *def );
 	void						CallFrameCommands( idEntity *ent, int from, int to ) const;
 	bool						HasFrameCommands( void ) const;
 
-								// returns first frame (zero based) that command occurs.  returns -1 if not found.
+								// returns first frame (zero based) that command occurs. returns -1 if not found.
 	int							FindFrameForFrameCommand( frameCommandType_t framecommand, const frameCommand_t **command ) const;
 	void						SetAnimFlags( const animFlags_t &animflags );
 	const animFlags_t			&GetAnimFlags( void ) const;
+
+	// configurable playback rate (Quake 4) --->
+	float						GetPlaybackRate( void ) const;
+	void						SetPlaybackRate( float rate );
+	// <---
 };
+
+// configurable playback rate (Quake 4) --->
+ID_INLINE float idAnim::GetPlaybackRate( void ) const {
+	return rate;
+}
+
+ID_INLINE void idAnim::SetPlaybackRate( float _rate ) {
+	rate = _rate;
+}
+// <---
 
 /*
 ==============================================================================================
@@ -330,35 +356,34 @@ public:
 								~idDeclModelDef();
 
 	virtual size_t				Size( void ) const;
-	virtual const char *		DefaultDefinition( void ) const;
+	virtual const char			*DefaultDefinition( void ) const;
 	virtual bool				Parse( const char *text, const int textLength );
 	virtual void				FreeData( void );
 
 	void						Touch( void ) const;
 
-	const idDeclSkin *			GetDefaultSkin( void ) const;
-	const idJointQuat *			GetDefaultPose( void ) const;
+	const idDeclSkin			*GetDefaultSkin( void ) const;
+	const idJointQuat			*GetDefaultPose( void ) const;
 	void						SetupJoints( int *numJoints, idJointMat **jointList, idBounds &frameBounds, bool removeOriginOffset ) const;
-	idRenderModel *				ModelHandle( void ) const;
+	idRenderModel				*ModelHandle( void ) const;
 	void						GetJointList( const char *jointnames, idList<jointHandle_t> &jointList ) const;
-	const jointInfo_t *			FindJoint( const char *name ) const;
+	const jointInfo_t			*FindJoint( const char *name ) const;
 
 	int							NumAnims( void ) const;
-	const idAnim *				GetAnim( int index ) const;
+	const idAnim				*GetAnim( int index ) const;
 	int							GetSpecificAnim( const char *name ) const;
 	int							GetAnim( const char *name ) const;
 	bool						HasAnim( const char *name ) const;
-	const idDeclSkin *			GetSkin( void ) const;
-	const char *				GetModelName( void ) const;
-	const idList<jointInfo_t> &	Joints( void ) const;
-	const int *					JointParents( void ) const;
+	const idDeclSkin			*GetSkin( void ) const;
+	const char					*GetModelName( void ) const;
+	const idList<jointInfo_t>	&Joints( void ) const;
+	const int					*JointParents( void ) const;
 	int							NumJoints( void ) const;
-	const jointInfo_t *			GetJoint( int jointHandle ) const;
-	const char *				GetJointName( int jointHandle ) const;
+	const jointInfo_t			*GetJoint( int jointHandle ) const;
+	const char					*GetJointName( int jointHandle ) const;
 	int							NumJointsOnChannel( int channel ) const;
-	const int *					GetChannelJoints( int channel ) const;
-
-	const idVec3 &				GetVisualOffset( void ) const;
+	const int					*GetChannelJoints( int channel ) const;
+	const idVec3				&GetVisualOffset( void ) const;
 
 private:
 	void						CopyDecl( const idDeclModelDef *decl );
@@ -369,9 +394,9 @@ private:
 	idList<jointInfo_t>			joints;
 	idList<int>					jointParents;
 	idList<int>					channelJoints[ ANIM_NumAnimChannels ];
-	idRenderModel *				modelHandle;
-	idList<idAnim *>			anims;
-	const idDeclSkin *			skin;
+	idRenderModel				*modelHandle;
+	idList<idAnim*>				anims;
+	const idDeclSkin			*skin;
 };
 
 /*
@@ -407,8 +432,12 @@ private:
 	void						Reset( const idDeclModelDef *_modelDef );
 	void						CallFrameCommands( idEntity *ent, int fromtime, int totime ) const;
 	void						SetFrame( const idDeclModelDef *modelDef, int animnum, int frame, int currenttime, int blendtime );
-	void						CycleAnim( const idDeclModelDef *modelDef, int animnum, int currenttime, int blendtime );
-	void						PlayAnim( const idDeclModelDef *modelDef, int animnum, int currenttime, int blendtime );
+
+	// added rate parameter for configurable playback rate (Quake 4) --->
+	void						CycleAnim( const idDeclModelDef *modelDef, int animnum, int currenttime, int blendtime, float rate );
+	void						PlayAnim( const idDeclModelDef *modelDef, int animnum, int currenttime, int blendtime, float rate );
+	// <---
+
 	bool						BlendAnim( int currentTime, int channel, int numJoints, idJointQuat *blendFrame, float &blendWeight, bool removeOrigin, bool overrideBlend, bool printInfo ) const;
 	void						BlendOrigin( int currentTime, idVec3 &blendPos, float &blendWeight, bool removeOriginOffset ) const;
 	void						BlendDelta( int fromtime, int totime, idVec3 &blendDelta, float &blendWeight ) const;
@@ -543,6 +572,11 @@ public:
 	void						ClearJoint( jointHandle_t jointnum );
 	void						ClearAllJoints( void );
 
+	// configurable playback rate (Quake 4) --->
+	void						SetPlaybackRate( float multiplier );
+	void						SetPlaybackRate( const char *animName, float rate );
+	void						SetPlaybackRate( int animHandle, float rate );
+
 	void						InitAFPose( void );
 	void						SetAFPoseJointMod( const jointHandle_t jointNum, const AFJointModType_t mod, const idMat3 &axis, const idVec3 &origin );
 	void						FinishAFPose( int animnum, const idBounds &bounds, const int time );
@@ -553,7 +587,7 @@ public:
 	void						ClearAllAnims( int currentTime, int cleartime );
 
 	jointHandle_t				GetJointHandle( const char *name ) const;
-	const char *				GetJointName( jointHandle_t handle ) const;
+	const char					*GetJointName( jointHandle_t handle ) const;
 	int							GetChannelForJoint( jointHandle_t joint ) const;
 	bool						GetJointTransform( jointHandle_t jointHandle, int currenttime, idVec3 &offset, idMat3 &axis );
 	bool						GetJointLocalTransform( jointHandle_t jointHandle, int currentTime, idVec3 &offset, idMat3 &axis );
@@ -571,13 +605,13 @@ private:
 	void						PushAnims( int channel, int currentTime, int blendTime );
 
 private:
-	const idDeclModelDef *		modelDef;
-	idEntity *					entity;
+	const idDeclModelDef		*modelDef;
+	idEntity					*entity;
 
 	idAnimBlend					channels[ ANIM_NumAnimChannels ][ ANIM_MaxAnimsPerChannel ];
-	idList<jointMod_t *>		jointMods;
+	idList<jointMod_t*>			jointMods;
 	int							numJoints;
-	idJointMat *				joints;
+	idJointMat					*joints;
 
 	mutable int					lastTransformTime;		// mutable because the value is updated in CreateFrame
 	mutable bool				stoppedAnimatingUpdate;
@@ -592,7 +626,17 @@ private:
 	idList<idJointQuat>			AFPoseJointFrame;
 	idBounds					AFPoseBounds;
 	int							AFPoseTime;
+
+	// configurable playback rate (Quake 4) --->
+	float						rateMultiplier;
+	// <---
 };
+
+// configurable playback rate (Quake 4) --->
+ID_INLINE void idAnimator::SetPlaybackRate( float _rate ) {
+	rateMultiplier = _rate;
+}
+// <---
 
 /*
 ==============================================================================================
@@ -610,17 +654,15 @@ public:
 	static bool					forceExport;
 
 	void						Shutdown( void );
-	idMD5Anim *					GetAnim( const char *name );
+	idMD5Anim					*GetAnim( const char *name );
 	void						ReloadAnims( void );
 	void						ListAnims( void ) const;
 	int							JointIndex( const char *name );
-	const char *				JointName( int index ) const;
-
-	void						ClearAnimsInUse( void );
+	const char					*JointName( int index ) const;
 	void						FlushUnusedAnims( void );
 
 private:
-	idHashTable<idMD5Anim *>	animations;
+	idHashTable<idMD5Anim*>		animations;
 	idStrList					jointnames;
 	idHashIndex					jointnamesHash;
 };

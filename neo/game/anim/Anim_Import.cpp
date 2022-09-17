@@ -35,11 +35,13 @@ If you have questions concerning this license or the applicable additional terms
 
 #include "anim/Anim.h"
 
-/***********************************************************************
+/*
+===============================================================================
 
-	Maya conversion functions
+	idModelExport / Maya Conversion Functions
 
-***********************************************************************/
+===============================================================================
+*/
 
 static idStr				Maya_Error;
 
@@ -99,7 +101,7 @@ bool idModelExport::CheckMayaInstall( void ) {
 		return false;
 	}
 
-	lres = RegQueryValueEx( hKey, "MAYA_INSTALL_LOCATION", NULL, (unsigned long*)&lType, (unsigned char*)NULL, (unsigned long*)NULL );
+	lres = RegQueryValueEx( hKey, "MAYA_INSTALL_LOCATION", NULL, ( unsigned long* )&lType, ( unsigned char* )NULL, ( unsigned long* )NULL );
 
 	RegCloseKey( hKey );
 
@@ -176,8 +178,7 @@ version number has changed.
 =====================
 */
 bool idModelExport::ConvertMayaToMD5( void ) {
-	ID_TIME_T
-		sourceTime;
+	ID_TIME_T		sourceTime;
 	ID_TIME_T		destTime;
 	int			version;
 	idToken		cmdLine;
@@ -185,7 +186,7 @@ bool idModelExport::ConvertMayaToMD5( void ) {
 
 	// check if our DLL got loaded
 	if ( initialized && !Maya_ConvertModel ) {
-		Maya_Error = "MayaImport dll not loaded.";
+		Maya_Error = "MayaImport dll not loaded. Place mayaimportx86.dll in Doom3's root folder.";
 		return false;
 	}
 
@@ -197,6 +198,7 @@ bool idModelExport::ConvertMayaToMD5( void ) {
 	// get the source file's time
 	if ( fileSystem->ReadFile( src, NULL, &sourceTime ) < 0 ) {
 		// source file doesn't exist
+		gameLocal.Warning( "Source file doesn't exist: %s", src.c_str() );
 		return true;
 	}
 
@@ -217,6 +219,7 @@ bool idModelExport::ConvertMayaToMD5( void ) {
 				// check the file time, scale, and version
 				if ( ( destTime >= sourceTime ) && ( version == MD5_VERSION ) && ( cmdLine == commandLine ) ) {
 					// don't convert it
+					gameLocal.Printf( "MD5 is up-to-date. Stopping export.\n" );
 					return true;
 				}
 			}
@@ -236,7 +239,7 @@ bool idModelExport::ConvertMayaToMD5( void ) {
 
 		// check if our DLL got loaded
 		if ( !Maya_ConvertModel ) {
-			Maya_Error = "Could not load MayaImport dll.";
+			Maya_Error = "Could not load MayaImport dll. Place mayaimportx86.dll in Doom3's root folder.";
 			return false;
 		}
 	}
@@ -283,7 +286,7 @@ idModelExport::ExportModel
 */
 bool idModelExport::ExportModel( const char *model ) {
 	const char *game = cvarSystem->GetCVarString( "fs_game" );
-	if ( strlen(game) == 0 ) {
+	if ( strlen( game ) == 0 ) {
 		game = BASE_GAMEDIR;
 	}
 
@@ -308,7 +311,7 @@ idModelExport::ExportAnim
 */
 bool idModelExport::ExportAnim( const char *anim ) {
 	const char *game = cvarSystem->GetCVarString( "fs_game" );
-	if ( strlen(game) == 0 ) {
+	if ( strlen( game ) == 0 ) {
 		game = BASE_GAMEDIR;
 	}
 
@@ -344,7 +347,7 @@ bool idModelExport::ParseOptions( idLexer &lex ) {
 	src = token;
 	dest = token;
 
-	while( lex.ReadToken( &token ) ) {
+	while ( lex.ReadToken( &token ) ) {
 		if ( token == "-" ) {
 			if ( !lex.ReadToken( &token ) ) {
 				lex.Error( "Expecting option" );
@@ -405,6 +408,11 @@ int idModelExport::ParseExportSection( idParser &parser ) {
 	idStr	parms;
 	int		count;
 
+	const char *game = cvarSystem->GetCVarString( "fs_game" );
+	if ( strlen( game ) == 0 ) {
+		game = BASE_GAMEDIR;
+	}
+
 	// only export sections that match our export mask
 	if ( g_exportMask.GetString()[ 0 ] ) {
 		if ( parser.CheckTokenString( "{" ) ) {
@@ -428,8 +436,7 @@ int idModelExport::ParseExportSection( idParser &parser ) {
 
 	lex.SetFlags( LEXFL_NOSTRINGCONCAT | LEXFL_ALLOWPATHNAMES | LEXFL_ALLOWMULTICHARLITERALS | LEXFL_ALLOWBACKSLASHSTRINGCONCAT );
 
-	while( 1 ) {
-
+	while ( 1 ) {
 		if ( !parser.ReadToken( &command ) ) {
 			parser.Error( "Unexpoected end-of-file" );
 			break;
@@ -466,7 +473,7 @@ int idModelExport::ParseExportSection( idParser &parser ) {
 			Reset();
 			if ( ParseOptions( lex ) ) {
 				const char *game = cvarSystem->GetCVarString( "fs_game" );
-				if ( strlen(game) == 0 ) {
+				if ( strlen( game ) == 0 ) {
 					game = BASE_GAMEDIR;
 				}
 
@@ -515,7 +522,7 @@ int idModelExport::ExportDefFile( const char *filename ) {
 		return 0;
 	}
 
-	while( parser.ReadToken( &token ) ) {
+	while ( parser.ReadToken( &token ) ) {
 		if ( token == "export" ) {
 			count += ParseExportSection( parser );
 		} else {
@@ -533,12 +540,11 @@ idModelExport::ExportModels
 ================
 */
 int idModelExport::ExportModels( const char *pathname, const char *extension ) {
-	int	count;
+	int			i;
+	int			count;
+	idFileList *files;
 
 	count = 0;
-
-	idFileList *files;
-	int			i;
 
 	if ( !CheckMayaInstall() ) {
 		// if Maya isn't installed, don't bother checking if we have anims to export
@@ -549,8 +555,6 @@ int idModelExport::ExportModels( const char *pathname, const char *extension ) {
 	if ( !g_exportMask.GetString()[ 0 ] ) {
 		gameLocal.Printf( "  Export mask: '%s'\n", g_exportMask.GetString() );
 	}
-
-	count = 0;
 
 	files = fileSystem->ListFiles( pathname, extension );
 	for( i = 0; i < files->GetNumFiles(); i++ ) {

@@ -37,7 +37,7 @@ If you have questions concerning this license or the applicable additional terms
 /*
 =============================================================================
 
-  MODEL TESTING
+	MODEL TESTING
 
 Model viewing can begin with either "testmodel <modelname>"
 
@@ -47,12 +47,15 @@ The names must be the full pathname after the basedir, like
 Extension will default to ".ase" if not specified.
 
 Testmodel will create a fake entity 100 units in front of the current view
-position, directly facing the viewer.  It will remain immobile, so you can
+position, directly facing the viewer. It will remain immobile, so you can
 move around it to view it from different angles.
 
-  g_testModelRotate
-  g_testModelAnimate
-  g_testModelBlend
+ *	g_testModelRotate
+ *	g_testModelAnimate
+ *	g_testModelBlend
+ *	g_testModelRoll
+ *	g_testModelPitch
+ *	g_testModelYaw
 
 =============================================================================
 */
@@ -149,7 +152,7 @@ void idTestModel::Spawn( void ) {
 			// copy any sounds in case we have frame commands on the head
 			idDict				args;
 			const idKeyValue	*sndKV = spawnArgs.MatchPrefix( "snd_", NULL );
-			while( sndKV ) {
+			while ( sndKV ) {
 				args.Set( sndKV->GetKey(), sndKV->GetValue() );
 				sndKV = spawnArgs.MatchPrefix( "snd_", sndKV );
 			}
@@ -165,7 +168,7 @@ void idTestModel::Spawn( void ) {
 			headAnimator = head.GetEntity()->GetAnimator();
 
 			// set up the list of joints to copy to the head
-			for( kv = spawnArgs.MatchPrefix( "copy_joint", NULL ); kv != NULL; kv = spawnArgs.MatchPrefix( "copy_joint", kv ) ) {
+			for ( kv = spawnArgs.MatchPrefix( "copy_joint", NULL ); kv != NULL; kv = spawnArgs.MatchPrefix( "copy_joint", kv ) ) {
 				jointName = kv->GetKey();
 
 				if ( jointName.StripLeadingOnce( "copy_joint_world " ) ) {
@@ -220,6 +223,7 @@ idTestModel::~idTestModel() {
 		head.GetEntity()->StopSound( SND_CHANNEL_ANY, false );
 		head.GetEntity()->PostEventMS( &EV_Remove, 0 );
 	}
+	SetPhysics( NULL );
 }
 
 /*
@@ -254,12 +258,24 @@ void idTestModel::Think( void ) {
 	idAngles ang;
 	int	i;
 
+	/*
+	 * BUG : If an animation has a rate multiplier set, let's give an example of 2, and the animation itself
+	 * takes 2 seconds to complete, then testModel will play the animation at 2x framerate, finishing
+	 * the playback at 1 second mark, leaving the model stuck on the last frame until the original
+	 * time of the animation is reached ( in our example means 1 more second ). Same happens when
+	 * dividing the rate, except in reverse, skipping the animation.
+	 * 
+	 * This happens only on case 0 below and it was not fixed in Quake 4 aswell. It is not game-breaking
+	 * by any means but I tought I'd leave a note about the issue.
+	 */
+
 	if ( thinkFlags & TH_THINK ) {
 		if ( anim && ( gameLocal.testmodel == this ) && ( mode != g_testModelAnimate.GetInteger() ) ) {
 			StopSound( SND_CHANNEL_ANY, false );
 			if ( head.GetEntity() ) {
 				head.GetEntity()->StopSound( SND_CHANNEL_ANY, false );
 			}
+
 			switch( g_testModelAnimate.GetInteger() ) {
 			default:
 			case 0:
@@ -347,7 +363,7 @@ void idTestModel::Think( void ) {
 
 		if ( headAnimator ) {
 			// copy the animation from the body to the head
-			for( i = 0; i < copyJoints.Num(); i++ ) {
+			for ( i = 0; i < copyJoints.Num(); i++ ) {
 				if ( copyJoints[ i ].mod == JOINTMOD_WORLD_OVERRIDE ) {
 					idMat3 mat = head.GetEntity()->GetPhysics()->GetAxis().Transpose();
 					GetJointWorldTransform( copyJoints[ i ].from, gameLocal.time, pos, axis );
@@ -362,14 +378,21 @@ void idTestModel::Think( void ) {
 			}
 		}
 
-		// update rotation
 		RunPhysics();
 
+		// update rotation
 		physicsObj.GetAngles( ang );
-		physicsObj.SetAngularExtrapolation( extrapolation_t(EXTRAPOLATION_LINEAR|EXTRAPOLATION_NOSTOP), gameLocal.time, 0, ang, idAngles( 0, g_testModelRotate.GetFloat() * 360.0f / 60.0f, 0 ), ang_zero );
+		physicsObj.SetAngularExtrapolation( extrapolation_t( EXTRAPOLATION_LINEAR | EXTRAPOLATION_NOSTOP ), gameLocal.time, 0, ang, idAngles( 0, g_testModelRotate.GetFloat() * 360.0f / 60.0f, 0 ), ang_zero );
+
+		// update angles
+		idAngles newAngles	= GetPhysics()->GetAxis().ToAngles();
+		newAngles.roll		= g_testModelRoll.GetFloat();
+		newAngles.pitch		= g_testModelPitch.GetFloat();
+		newAngles.yaw		= g_testModelYaw.GetFloat();
+		physicsObj.SetAxis( newAngles.ToMat3() );
 
 		idClipModel *clip = physicsObj.GetClipModel();
-		if ( clip && animator.ModelDef() ) {
+		if ( clip != NULL && animator.ModelDef() ) {
 			idVec3 neworigin;
 			idMat3 axis;
 			jointHandle_t joint;
@@ -530,16 +553,15 @@ idTestModel::TestAnim
 void idTestModel::TestAnim( const idCmdArgs &args ) {
 	idStr			name;
 	int				animNum;
-
+;
 	if ( args.Argc() < 2 ) {
 		gameLocal.Printf( "usage: testanim <animname>\n" );
 		return;
 	}
-
+	
 	name = args.Argv( 1 );
 #if 0
-	const idAnim	*newanim = NULL;
-
+	const idAnim *newanim = NULL;
 	if ( strstr( name, ".ma" ) || strstr( name, ".mb" ) ) {
 		const idMD5Anim	*md5anims[ ANIM_MaxSyncedAnims ];
 		idModelExport exporter;
@@ -582,7 +604,9 @@ void idTestModel::TestAnim( const idCmdArgs &args ) {
 	}
 
 	animname = name;
-	gameLocal.Printf( "anim '%s', %d.%03d seconds, %d frames\n", animname.c_str(), animator.AnimLength( anim ) / 1000, animator.AnimLength( anim ) % 1000, animator.NumFrames( anim ) );
+
+	// print the rate multiplier aswell
+	gameLocal.Printf( "anim '%s', %d.%03d seconds, %d frames, rate multiplier %f\n", animname.c_str(), animator.AnimLength( anim ) / 1000, animator.AnimLength( anim ) % 1000, animator.NumFrames( anim ), GetPlayBackRate( animNum ) );
 
 	// reset the anim
 	mode = -1;
@@ -622,6 +646,24 @@ void idTestModel::BlendAnim( const idCmdArgs &args ) {
 	headAnim = 0;
 }
 
+/*
+=====================
+idTestModel::GetPlayBackRate
+
+Returns the playback rate of the animation.
+=====================
+*/
+float idTestModel::GetPlayBackRate( int animNum ) {
+	const idAnim *anim;
+
+	anim = GetAnimator()->GetAnim( animNum );
+	if ( !anim ) {
+		return 1.0f;
+	}
+	
+	return anim->GetPlaybackRate();	
+}
+
 /***********************************************************************
 
 	Testmodel console commands
@@ -655,10 +697,8 @@ Sets a skin on an existing testModel
 =================
 */
 void idTestModel::TestSkin_f( const idCmdArgs &args ) {
-	idVec3		offset;
+	idPlayer	*player;
 	idStr		name;
-	idPlayer *	player;
-	idDict		dict;
 
 	player = gameLocal.GetLocalPlayer();
 	if ( !player || !gameLocal.CheatsOk() ) {
@@ -689,10 +729,7 @@ Sets a shaderParm on an existing testModel
 =================
 */
 void idTestModel::TestShaderParm_f( const idCmdArgs &args ) {
-	idVec3		offset;
-	idStr		name;
-	idPlayer *	player;
-	idDict		dict;
+	idPlayer	*player;
 
 	player = gameLocal.GetLocalPlayer();
 	if ( !player || !gameLocal.CheatsOk() ) {
@@ -710,13 +747,13 @@ void idTestModel::TestShaderParm_f( const idCmdArgs &args ) {
 		return;
 	}
 
-	int	parm = atoi( args.Argv( 1 ) );
+	int parm = atoi( args.Argv( 1 ) );
 	if ( parm < 0 || parm >= MAX_ENTITY_SHADER_PARMS ) {
 		common->Printf( "parmNum %i out of range\n", parm );
 		return;
 	}
 
-	float	value;
+	float value;
 	if ( !idStr::Icmp( args.Argv( 2 ), "time" ) ) {
 		value = gameLocal.time * -0.001;
 	} else {
@@ -737,9 +774,9 @@ can then be moved around
 void idTestModel::TestModel_f( const idCmdArgs &args ) {
 	idVec3			offset;
 	idStr			name;
-	idPlayer *		player;
-	const idDict *	entityDef;
+	const idDict	*entityDef;
 	idDict			dict;
+	idPlayer		*player;
 
 	player = gameLocal.GetLocalPlayer();
 	if ( !player || !gameLocal.CheatsOk() ) {
@@ -771,6 +808,7 @@ void idTestModel::TestModel_f( const idCmdArgs &args ) {
 				name.DefaultFileExtension( ".ase" );
 			}
 
+			// Maya ascii format is supported natively now
 			if ( strstr( name, ".ma" ) || strstr( name, ".mb" ) ) {
 				idModelExport exporter;
 				exporter.ExportModel( name );
@@ -798,7 +836,7 @@ void idTestModel::TestModel_f( const idCmdArgs &args ) {
 idTestModel::ArgCompletion_TestModel
 =====================
 */
-void idTestModel::ArgCompletion_TestModel( const idCmdArgs &args, void(*callback)( const char *s ) ) {
+void idTestModel::ArgCompletion_TestModel( const idCmdArgs &args, void( *callback )( const char *s ) ) {
 	int i, num;
 
 	num = declManager->GetNumDecls( DECL_ENTITYDEF );
@@ -847,10 +885,10 @@ void idTestModel::TestAnim_f( const idCmdArgs &args ) {
 idTestModel::ArgCompletion_TestAnim
 =====================
 */
-void idTestModel::ArgCompletion_TestAnim( const idCmdArgs &args, void(*callback)( const char *s ) ) {
+void idTestModel::ArgCompletion_TestAnim( const idCmdArgs &args, void( *callback )( const char *s ) ) {
 	if ( gameLocal.testmodel ) {
 		idAnimator *animator = gameLocal.testmodel->GetAnimator();
-		for( int i = 0; i < animator->NumAnims(); i++ ) {
+		for ( int i = 0; i < animator->NumAnims(); i++ ) {
 			callback( va( "%s %s", args.Argv( 0 ), animator->AnimFullName( i ) ) );
 		}
 	}
