@@ -25,17 +25,18 @@ If you have questions concerning this license or the applicable additional terms
 
 ===========================================================================
 */
-/***********************************************************************
 
-game/ai/AI_Vagary.cpp
+/*
+===============================================================================
 
-Vagary specific AI code
+	Vagary specific AI code
 
-***********************************************************************/
+===============================================================================
+*/
 
 #include "sys/platform.h"
-#include "script/Script_Thread.h"
 
+#include "script/Script_Thread.h"
 #include "gamesys/SysCvar.h"
 #include "Moveable.h"
 
@@ -64,8 +65,8 @@ idAI_Vagary::Event_ChooseObjectToThrow
 ================
 */
 void idAI_Vagary::Event_ChooseObjectToThrow( const idVec3 &mins, const idVec3 &maxs, float speed, float minDist, float offset ) {
-	idEntity *	ent;
-	idEntity *	entityList[ MAX_GENTITIES ];
+	idEntity	*ent;
+	idEntity	*entityList[ MAX_GENTITIES ];
 	int			numListedEntities;
 	int			i, index;
 	float		dist;
@@ -73,8 +74,9 @@ void idAI_Vagary::Event_ChooseObjectToThrow( const idVec3 &mins, const idVec3 &m
 	idVec3		offsetVec( 0, 0, offset );
 	idEntity	*enemyEnt = enemy.GetEntity();
 
-	if ( !enemyEnt ) {
+	if ( enemyEnt == NULL ) {
 		idThread::ReturnEntity( NULL );
+		return;
 	}
 
 	idVec3 enemyEyePos = lastVisibleEnemyPos + lastVisibleEnemyEyeOffset;
@@ -128,12 +130,10 @@ idAI_Vagary::Event_ThrowObjectAtEnemy
 */
 void idAI_Vagary::Event_ThrowObjectAtEnemy( idEntity *ent, float speed ) {
 	idVec3		vel;
-	idEntity	*enemyEnt;
-	idPhysics	*entPhys;
+	idEntity	*enemyEnt = enemy.GetEntity();;
+	idPhysics	*entPhys = ent->GetPhysics();
 
-	entPhys	= ent->GetPhysics();
-	enemyEnt = enemy.GetEntity();
-	if ( !enemyEnt ) {
+	if ( enemyEnt == NULL ) {
 		vel = ( viewAxis[ 0 ] * physicsObj.GetGravityAxis() ) * speed;
 	} else {
 		PredictTrajectory( entPhys->GetOrigin(), lastVisibleEnemyPos + lastVisibleEnemyEyeOffset, speed, entPhys->GetGravity(),

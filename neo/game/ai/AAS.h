@@ -51,15 +51,13 @@ typedef struct aasPath_s {
 	idVec3						moveGoal;		// point the AI should move towards
 	int							moveAreaNum;	// number of the area the AI should move towards
 	idVec3						secondaryGoal;	// secondary move goal for complex navigation
-	const idReachability *		reachability;	// reachability used for navigation
+	const idReachability		*reachability;	// reachability used for navigation
 } aasPath_t;
-
 
 typedef struct aasGoal_s {
 	int							areaNum;		// area the goal is in
 	idVec3						origin;			// position of goal
 } aasGoal_t;
-
 
 typedef struct aasObstacle_s {
 	idBounds					absBounds;		// absolute bounds of obstacle
@@ -76,8 +74,9 @@ typedef int aasHandle_t;
 
 class idAAS {
 public:
-	static idAAS *				Alloc( void );
+	static idAAS				*Alloc( void );
 	virtual						~idAAS( void ) = 0;
+
 								// Initialize for the given map.
 	virtual bool				Init( const idStr &mapName, unsigned int mapFileCRC ) = 0;
 								// Print AAS stats.
@@ -85,13 +84,25 @@ public:
 								// Test from the given origin.
 	virtual void				Test( const idVec3 &origin ) = 0;
 								// Get the AAS settings.
-	virtual const idAASSettings *GetSettings( void ) const = 0;
+	virtual const idAASSettings	*GetSettings( void ) const = 0;
 								// Returns the number of the area the origin is in.
 	virtual int					PointAreaNum( const idVec3 &origin ) const = 0;
 								// Returns the number of the nearest reachable area for the given point.
 	virtual int					PointReachableAreaNum( const idVec3 &origin, const idBounds &bounds, const int areaFlags ) const = 0;
 								// Returns the number of the first reachable area in or touching the bounds.
 	virtual int					BoundsReachableAreaNum( const idBounds &bounds, const int areaFlags ) const = 0;
+
+	/*
+	 * Copied from d3world: this is what brian from id said about PushPointIntoAreaNum:
+	 * 
+	 * Quote: "If the point is already in the specified area, it does nothing, otherwise it 'pushes' 
+	 *         the point into the area by moving it along the surface normal of all the planes that make up the area.
+	 *         Imagine if an area were a box and the point were outside the bottom right side of the box,
+	 *         it would first push the point along the right normal so it would be below the box, then it 
+	 *         would push the point along the bottom normal so it would be inside the box."
+	 *
+	 * So basically, this alters the given idVec3 <origin>, so that it ends up being in the area box.
+	 */
 								// Push the point into the area.
 	virtual void				PushPointIntoAreaNum( int areaNum, idVec3 &origin ) const = 0;
 								// Returns a reachable point inside the given area.
@@ -103,7 +114,7 @@ public:
 								// Trace through the areas and report the first collision.
 	virtual bool				Trace( aasTrace_t &trace, const idVec3 &start, const idVec3 &end ) const = 0;
 								// Get a plane for a trace.
-	virtual const idPlane &		GetPlane( int planeNum ) const = 0;
+	virtual const idPlane		&GetPlane( int planeNum ) const = 0;
 								// Get wall edges.
 	virtual int					GetWallEdges( int areaNum, const idBounds &bounds, int travelFlags, int *edges, int maxEdges ) const = 0;
 								// Sort the wall edges to create continuous sequences of walls.
