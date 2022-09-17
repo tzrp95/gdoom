@@ -48,7 +48,6 @@ extern idCVar	g_skipParticles;
 extern idCVar	g_bloodEffects;
 extern idCVar	g_projectileLights;
 extern idCVar	g_doubleVision;
-extern idCVar	g_hitEffect;
 extern idCVar	g_muzzleFlash;
 
 extern idCVar	g_disasm;
@@ -95,6 +94,7 @@ extern idCVar	ai_showCombatNodes;
 extern idCVar	ai_showPaths;
 extern idCVar	ai_showObstacleAvoidance;
 extern idCVar	ai_blockedFailSafe;
+extern idCVar	ai_showHealth;
 
 extern idCVar	g_dvTime;
 extern idCVar	g_dvAmplitude;
@@ -119,6 +119,9 @@ extern idCVar	g_vehicleSuspensionDown;
 extern idCVar	g_vehicleSuspensionKCompress;
 extern idCVar	g_vehicleSuspensionDamping;
 extern idCVar	g_vehicleTireFriction;
+extern idCVar	g_vehicleDebug;
+extern idCVar	g_debugShockwave;
+extern idCVar	g_enablePortalSky;
 
 extern idCVar	ik_enable;
 extern idCVar	ik_debug;
@@ -225,6 +228,23 @@ extern idCVar	g_testModelBlend;
 extern idCVar	g_exportMask;
 extern idCVar	g_flushSave;
 
+extern idCVar	g_enableSlowmo;
+extern idCVar	g_slowmoStepRate;
+extern idCVar	g_testFullscreenFX;
+extern idCVar	g_testHelltimeFX;
+extern idCVar	g_testMultiplayerFX;
+extern idCVar	g_moveableDamageScale;
+extern idCVar	g_testBloomIntensity;
+extern idCVar	g_testBloomNumPasses;
+
+extern idCVar	g_grabberHoldSeconds;
+extern idCVar	g_grabberEnableShake;
+extern idCVar	g_grabberRandomMotion;
+extern idCVar	g_grabberHardStop;
+extern idCVar	g_grabberDamping;
+
+extern idCVar	g_xp_bind_run_once;
+
 extern idCVar	aas_test;
 extern idCVar	aas_showAreas;
 extern idCVar	aas_showPath;
@@ -248,11 +268,101 @@ extern idCVar	si_gameType;
 extern idCVar	si_map;
 extern idCVar	si_spectators;
 
+extern idCVar	si_flagDropTimeLimit;
+extern idCVar	si_midnight;
+
+extern idCVar	g_flagAttachJoint;
+extern idCVar	g_flagAttachOffsetX;
+extern idCVar	g_flagAttachOffsetY;
+extern idCVar	g_flagAttachOffsetZ;
+extern idCVar	g_flagAttachAngleX;
+extern idCVar	g_flagAttachAngleY;
+extern idCVar	g_flagAttachAngleZ;
+
+extern idCVar	g_CTFArrows;
+
 extern idCVar	net_clientSelfSmoothing;
 extern idCVar	net_clientLagOMeter;
 
-extern const char *si_gameTypeArgs[];
+extern const char	*si_gameTypeArgs[];
+extern const char	*ui_skinArgs[];
 
-extern const char *ui_skinArgs[];
+// new CVars
+extern idCVar	aas_showAll;
+
+extern idCVar	af_useBodyDensityBuoyancy;
+extern idCVar	af_useFixedDensityBuoyancy;
+
+extern idCVar	rb_showBuoyancy;
+
+extern idCVar	ai_think;
+
+extern idCVar	actor_noDamage;
+
+extern idCVar	g_testStuff;
+
+extern idCVar	g_testModelRoll;
+extern idCVar	g_testModelPitch;
+extern idCVar	g_testModelYaw;
+
+extern idCVar	g_showModelNames;
+extern idCVar	g_maxShowDistanceWorld;
+
+extern idCVar	g_weaponDepthHack;
+extern idCVar	g_weaponFlashShadows;
+
+extern idCVar	g_player;
+extern idCVar	g_playerOverride;
+
+extern idCVar	g_grabberProjDamageScale;
+
+extern idCVar	g_gibVelocity;
+extern idCVar	g_gibLifeTime;
+
+// -------------------------------------	
+//	Renderer/Post Proces related CVars
+// -------------------------------------
+extern idCVar	r_useHDR;		
+extern idCVar	r_hdrSceneExposure;
+extern idCVar	r_hdrMiddleGray;
+extern idCVar	r_hdrColorCurveBias;
+extern idCVar	r_hdrMaxColorIntensity;
+extern idCVar	r_hdrGammaCorrection;
+extern idCVar	r_hdrBloomIntensity;
+extern idCVar	r_hdrHaloIntensity;
+extern idCVar	r_hdrEyeAdaptationRate;
+extern idCVar	r_hdrEyeAdaptationBias;
+extern idCVar	r_hdrEyeAdaptationBloomBias;
+extern idCVar	r_hdrBrightPassThreshold;
+extern idCVar	r_hdrBrightPassOffset;
+extern idCVar	r_hdrMinLuminance;	
+extern idCVar	r_hdrMaxLuminance;
+extern idCVar	r_hdrLumUpdateRate;
+extern idCVar	r_hdrVignetteBias;
+extern idCVar	r_hdrDebugMode;
+extern idCVar	r_hdrDebugTextureIndex;
+
+extern idCVar	r_useCAS;
+
+// -------------------------------------	
+//	Player ability-related CVars
+// -------------------------------------
+extern idCVar	pm_abilityModifierPassive;
+extern idCVar	pm_abilityModifierActive;
+
+extern idCVar	pm_healthRegenTime;
+extern idCVar	pm_healthRegenDelay;
+extern idCVar	pm_healthRegenAmount;
+extern idCVar	pm_healthRegenLimit;
+extern idCVar	pm_healthRegenSteps;
+extern idCVar	pm_healthRegenStepsHard;
+
+extern idCVar	pm_airJumps;
+extern idCVar	pm_airJumpVelocity;
+
+extern idCVar	pm_maxDashes;
+extern idCVar	pm_dashVelocity;
+extern idCVar	pm_dashRechargeRate;
+
 
 #endif /* !__SYS_CVAR_H__ */

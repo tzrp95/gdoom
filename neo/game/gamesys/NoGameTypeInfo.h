@@ -32,39 +32,39 @@ If you have questions concerning this license or the applicable additional terms
 /*
 ===================================================================================
 
-	This file has been generated with the Type Info Generator v1.0 (c) 2004 id Software
+This file has been generated with the Type Info Generator v1.0 (c) 2004 id Software
 
 ===================================================================================
 */
 
 typedef struct {
-	const char * name;
-	const char * type;
-	const char * value;
+	const char	*name;
+	const char	*type;
+	const char	*value;
 } constantInfo_t;
 
 typedef struct {
-	const char * name;
+	const char	*name;
 	int value;
 } enumValueInfo_t;
 
 typedef struct {
-	const char * typeName;
-	const enumValueInfo_t * values;
+	const char	*typeName;
+	const enumValueInfo_t	*values;
 } enumTypeInfo_t;
 
 typedef struct {
-	const char * type;
-	const char * name;
+	const char	*type;
+	const char	*name;
 	int offset;
 	int size;
 } classVariableInfo_t;
 
 typedef struct {
-	const char * typeName;
-	const char * superType;
+	const char	*typeName;
+	const char	*superType;
 	int size;
-	const classVariableInfo_t * variables;
+	const classVariableInfo_t	*variables;
 } classTypeInfo_t;
 
 

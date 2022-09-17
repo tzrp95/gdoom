@@ -34,22 +34,22 @@ If you have questions concerning this license or the applicable additional terms
 
 // Event are used for scheduling tasks and for linking script commands.
 
-#define D_EVENT_MAXARGS				8			// if changed, enable the CREATE_EVENT_CODE define in Event.cpp to generate switch statement for idClass::ProcessEventArgPtr.
-												// running the game will then generate c:\doom\base\events.txt, the contents of which should be copied into the switch statement.
+#define D_EVENT_MAXARGS			8			// if changed, enable the CREATE_EVENT_CODE define in Event.cpp to generate switch statement for idClass::ProcessEventArgPtr.
+											// running the game will then generate c:\doom\base\events.txt, the contents of which should be copied into the switch statement.
 
 // stack size of idVec3, aligned to native pointer size
-#define E_EVENT_SIZEOF_VEC			((sizeof(idVec3) + (sizeof(intptr_t) - 1)) & ~(sizeof(intptr_t) - 1))
+#define E_EVENT_SIZEOF_VEC		( ( sizeof( idVec3 ) + ( sizeof( intptr_t ) - 1 ) ) & ~( sizeof( intptr_t ) - 1 ) )
 
-#define D_EVENT_VOID				( ( char )0 )
-#define D_EVENT_INTEGER				'd'
-#define D_EVENT_FLOAT				'f'
-#define D_EVENT_VECTOR				'v'
-#define D_EVENT_STRING				's'
-#define D_EVENT_ENTITY				'e'
-#define	D_EVENT_ENTITY_NULL			'E'			// event can handle NULL entity pointers
-#define D_EVENT_TRACE				't'
+#define D_EVENT_VOID			( ( char )0 )
+#define D_EVENT_INTEGER			'd'
+#define D_EVENT_FLOAT			'f'
+#define D_EVENT_VECTOR			'v'
+#define D_EVENT_STRING			's'
+#define D_EVENT_ENTITY			'e'
+#define	D_EVENT_ENTITY_NULL		'E'			// event can handle NULL entity pointers
+#define D_EVENT_TRACE			't'
 
-#define MAX_EVENTS					4096
+#define MAX_EVENTS				8192
 
 class idClass;
 class idTypeInfo;
@@ -64,9 +64,9 @@ private:
 	size_t						argsize;
 	int							argOffset[ D_EVENT_MAXARGS ];
 	int							eventnum;
-	const idEventDef *			next;
+	const idEventDef			*next;
 
-	static idEventDef *			eventDefList[MAX_EVENTS];
+	static idEventDef			*eventDefList[MAX_EVENTS];
 	static int					numEventDefs;
 
 public:
@@ -101,7 +101,6 @@ private:
 
 	static idDynamicBlockAlloc<byte, 16 * 1024, 256> eventDataAllocator;
 
-
 public:
 	static bool					initialized;
 
@@ -117,6 +116,7 @@ public:
 	static void					CancelEvents( const idClass *obj, const idEventDef *evdef = NULL );
 	static void					ClearEventList( void );
 	static void					ServiceEvents( void );
+	static void					ServiceFastEvents();
 	static void					Init( void );
 	static void					Shutdown( void );
 
@@ -125,7 +125,6 @@ public:
 	static void					Restore( idRestoreGame *savefile );				// unarchives object from save game file
 	static void					SaveTrace( idSaveGame *savefile, const trace_t &trace );
 	static void					RestoreTrace( idRestoreGame *savefile, trace_t &trace );
-
 };
 
 /*

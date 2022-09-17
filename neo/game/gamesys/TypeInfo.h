@@ -41,7 +41,7 @@ class idFile;
 ===================================================================================
 */
 
-const char *	GetTypeVariableName( const char *typeName, int offset );
+const char		*GetTypeVariableName( const char *typeName, int offset );
 
 void			PrintType( const void *typePtr, const char *typeName );
 void			WriteTypeToFile( idFile *fp, const void *typePtr, const char *typeName );

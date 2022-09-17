@@ -36,13 +36,6 @@ If you have questions concerning this license or the applicable additional terms
 class idClass;
 class idTypeInfo;
 
-/*
-
-Base class for all game objects.  Provides fast run-time type checking and run-time
-instancing of objects.
-
-*/
-
 extern const idEventDef EV_Remove;
 extern const idEventDef EV_SafeRemove;
 
@@ -66,7 +59,7 @@ public:
 
 	idEventArg()								{ type = D_EVENT_INTEGER; value = 0; };
 	idEventArg( int data )						{ type = D_EVENT_INTEGER; value = data; };
-	idEventArg( float data )					{ type = D_EVENT_FLOAT; value = *reinterpret_cast<int *>( &data ); };
+	idEventArg( float data )					{ type = D_EVENT_FLOAT; value = *reinterpret_cast<int*>( &data ); };
 	idEventArg( idVec3 &data )					{ type = D_EVENT_VECTOR; value = reinterpret_cast<intptr_t>( &data ); };
 	idEventArg( const idStr &data )				{ type = D_EVENT_STRING; value = reinterpret_cast<intptr_t>( data.c_str() ); };
 	idEventArg( const char *data )				{ type = D_EVENT_STRING; value = reinterpret_cast<intptr_t>( data ); };
@@ -79,11 +72,16 @@ public:
 	idAllocError( const char *text = "" ) : idException( text ) {}
 };
 
-/***********************************************************************
+/*
+===============================================================================
 
-  idClass
+	idClass
 
-***********************************************************************/
+	Base class for all C++ objects. Provides fast run-time type checking
+	and run-time instancing of objects.
+
+===============================================================================
+*/
 
 /*
 ================
@@ -115,14 +113,14 @@ incorrect.  Use this on concrete classes only.
 #define CLASS_DECLARATION( nameofsuperclass, nameofclass )											\
 	idTypeInfo nameofclass::Type( #nameofclass, #nameofsuperclass,									\
 		( idEventFunc<idClass> * )nameofclass::eventCallbacks,	nameofclass::CreateInstance, ( void ( idClass::* )( void ) )&nameofclass::Spawn,	\
-		( void ( idClass::* )( idSaveGame * ) const )&nameofclass::Save, ( void ( idClass::* )( idRestoreGame * ) )&nameofclass::Restore );	\
+		( void ( idClass::* )( idSaveGame* ) const )&nameofclass::Save, ( void ( idClass::* )( idRestoreGame* ) )&nameofclass::Restore );			\
 	idClass *nameofclass::CreateInstance( void ) {													\
 		try {																						\
 			nameofclass *ptr = new nameofclass;														\
 			ptr->FindUninitializedMemory();															\
 			return ptr;																				\
 		}																							\
-		catch( idAllocError & ) {																	\
+		catch( idAllocError& ) {																	\
 			return NULL;																			\
 		}																							\
 	}																								\
@@ -161,7 +159,7 @@ on abstract classes only.
 #define ABSTRACT_DECLARATION( nameofsuperclass, nameofclass )										\
 	idTypeInfo nameofclass::Type( #nameofclass, #nameofsuperclass,									\
 		( idEventFunc<idClass> * )nameofclass::eventCallbacks, nameofclass::CreateInstance, ( void ( idClass::* )( void ) )&nameofclass::Spawn,	\
-		( void ( idClass::* )( idSaveGame * ) const )&nameofclass::Save, ( void ( idClass::* )( idRestoreGame * ) )&nameofclass::Restore );	\
+		( void ( idClass::* )( idSaveGame* ) const )&nameofclass::Save, ( void ( idClass::* )( idRestoreGame* ) )&nameofclass::Restore );		\
 	idClass *nameofclass::CreateInstance( void ) {													\
 		gameLocal.Error( "Cannot instantiate abstract class %s.", #nameofclass );					\
 		return NULL;																				\
@@ -183,10 +181,10 @@ public:
 #ifdef ID_REDIRECT_NEWDELETE
 #undef new
 #endif
-	void *						operator new( size_t );
-	void *						operator new( size_t s, int, int, char *, int );
-	void						operator delete( void * );
-	void						operator delete( void *, int, int, char *, int );
+	void						*operator new( size_t );
+	void						*operator new( size_t s, int, int, char*, int );
+	void						operator delete( void* );
+	void						operator delete( void*, int, int, char*, int );
 #ifdef ID_REDIRECT_NEWDELETE
 #define new ID_DEBUG_NEW
 #endif
@@ -196,8 +194,8 @@ public:
 	void						Spawn( void );
 	void						CallSpawn( void );
 	bool						IsType( const idTypeInfo &c ) const;
-	const char *				GetClassname( void ) const;
-	const char *				GetSuperclass( void ) const;
+	const char					*GetClassname( void ) const;
+	const char					*GetSuperclass( void ) const;
 	void						FindUninitializedMemory( void );
 
 	void						Save( idSaveGame *savefile ) const {};
@@ -243,13 +241,14 @@ public:
 	// Static functions
 	static void					Init( void );
 	static void					Shutdown( void );
-	static idTypeInfo *			GetClass( const char *name );
+	static idTypeInfo			*GetClass( const char *name );
 	static void					DisplayInfo_f( const idCmdArgs &args );
 	static void					ListClasses_f( const idCmdArgs &args );
-	static idClass *			CreateInstance( const char *name );
+	static idClass				*CreateInstance( const char *name );
 	static int					GetNumTypes( void ) { return types.Num(); }
 	static int					GetTypeNumBits( void ) { return typeNumBits; }
-	static idTypeInfo *			GetType( int num );
+	static idTypeInfo			*GetType( int num );
+	static void					ExportScriptEvents_f( const idCmdArgs &args );
 
 private:
 	classSpawnFunc_t			CallSpawnFunc( idTypeInfo *cls );
@@ -260,32 +259,34 @@ private:
 	void						Event_SafeRemove( void );
 
 	static bool					initialized;
-	static idList<idTypeInfo *>	types;
-	static idList<idTypeInfo *>	typenums;
+	static idList<idTypeInfo*>	types;
+	static idList<idTypeInfo*>	typenums;
 	static int					typeNumBits;
 	static int					memused;
 	static int					numobjects;
 };
 
-/***********************************************************************
+/*
+===============================================================================
 
-  idTypeInfo
+	idTypeInfo
 
-***********************************************************************/
+===============================================================================
+*/
 
 class idTypeInfo {
 public:
-	const char *				classname;
-	const char *				superclass;
-	idClass *					( *CreateInstance )( void );
+	const char					*classname;
+	const char					*superclass;
+	idClass						*( *CreateInstance )( void );
 	void						( idClass::*Spawn )( void );
 	void						( idClass::*Save )( idSaveGame *savefile ) const;
 	void						( idClass::*Restore )( idRestoreGame *savefile );
 
-	idEventFunc<idClass> *		eventCallbacks;
-	eventCallback_t *			eventMap;
-	idTypeInfo *				super;
-	idTypeInfo *				next;
+	idEventFunc<idClass>		*eventCallbacks;
+	eventCallback_t				*eventMap;
+	idTypeInfo					*super;
+	idTypeInfo					*next;
 	bool						freeEventMap;
 	int							typeNum;
 	int							lastChild;

@@ -36,12 +36,6 @@ If you have questions concerning this license or the applicable additional terms
 
 #include "gamesys/Class.h"
 
-/*
-
-Save game related helper classes.
-
-*/
-
 const int INITIAL_RELEASE_BUILD_NUMBER = 1262;
 
 class idSaveGame {
@@ -96,9 +90,9 @@ public:
 	void					WriteBuildNumber( const int value );
 
 private:
-	idFile *				file;
+	idFile					*file;
 
-	idList<const idClass *>	objects;
+	idList<const idClass*>	objects;
 
 	void					CallSave_r( const idTypeInfo *cls, const idClass *obj );
 };
@@ -112,7 +106,7 @@ public:
 	void					RestoreObjects( void );
 	void					DeleteObjects( void );
 
-	void					Error( const char *fmt, ... ) id_attribute((format(printf,2,3)));
+	void					Error( const char *fmt, ... ) id_attribute( ( format( printf,2,3 ) ) );
 
 	void					Read( void *buffer, int len );
 	void					ReadInt( int &value );
@@ -176,9 +170,9 @@ private:
 	int						buildNumber;
 	int						internalSavegameVersion; // DG added this
 
-	idFile *				file;
+	idFile					*file;
 
-	idList<idClass *>		objects;
+	idList<idClass*>		objects;
 
 	void					CallRestore_r( const idTypeInfo *cls, idClass *obj );
 };
