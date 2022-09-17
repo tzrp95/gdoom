@@ -257,6 +257,11 @@ public:
 	virtual const idMD5Anim *	ANIM_GetAnimFromEntityDef( const char *classname, const char *animname );
 	virtual int					ANIM_GetNumAnimsFromEntityDef( const idDict *args );
 	virtual const char *		ANIM_GetAnimNameFromEntityDef( const idDict *args, int animNum );
+
+	// configurable playback rate (Quake 4) --->
+	virtual float				ANIM_GetAnimPlaybackRateFromEntity ( idEntity *ent, int animNum );
+	// <---
+
 	virtual const idMD5Anim *	ANIM_GetAnim( const char *fileName );
 	virtual int					ANIM_GetLength( const idMD5Anim *anim );
 	virtual int					ANIM_GetNumFrames( const idMD5Anim *anim );
