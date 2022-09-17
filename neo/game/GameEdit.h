@@ -59,7 +59,6 @@ public:
 	idVec3					draggedPosition;
 };
 
-
 /*
 ===============================================================================
 
@@ -76,7 +75,7 @@ public:
 	void					Clear();
 	void					Update( idPlayer *player );
 	void					SetSelected( idEntity *ent );
-	idEntity *				GetSelected( void ) const { return selected.GetEntity(); }
+	idEntity				*GetSelected( void ) const { return selected.GetEntity(); }
 	void					DeleteSelected( void );
 	void					BindSelected( void );
 	void					UnbindSelected( void );
@@ -88,12 +87,11 @@ private:
 	idVec3					localEntityPoint;	// dragged point in entity space
 	idVec3					localPlayerPoint;	// dragged point in player space
 	idStr					bodyName;			// name of the body being dragged
-	idCursor3D *			cursor;				// cursor entity
+	idCursor3D				*cursor;			// cursor entity
 	idEntityPtr<idEntity>	selected;			// last dragged entity
 
 	void					StopDrag( void );
 };
-
 
 /*
 ===============================================================================
@@ -103,8 +101,8 @@ private:
 ===============================================================================
 */
 typedef struct selectedTypeInfo_s {
-	idTypeInfo *typeInfo;
-	idStr		textKey;
+	idTypeInfo		*typeInfo;
+	idStr			textKey;
 } selectedTypeInfo_t;
 
 class idEditEntities {
@@ -119,7 +117,7 @@ public:
 private:
 	int						nextSelectTime;
 	idList<selectedTypeInfo_t> selectableEntityClasses;
-	idList<idEntity *>		selectedEntities;
+	idList<idEntity*>		selectedEntities;
 };
 
 #endif /* !__GAME_EDIT_H__ */

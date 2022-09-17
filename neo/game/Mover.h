@@ -40,10 +40,14 @@ extern const idEventDef EV_ReachedAng;
 /*
 ===============================================================================
 
-  General movers.
+	General movers.
 
 ===============================================================================
 */
+
+// =====================================================
+//	idMover
+// =====================================================
 
 class idMover : public idEntity {
 public:
@@ -134,6 +138,9 @@ protected:
 	virtual void			BeginRotation( idThread *thread, bool stopwhendone );
 	moveState_t				move;
 
+	// so idElevator doors can damage too
+	float					damage;
+
 private:
 	rotationState_t			rot;
 
@@ -151,14 +158,13 @@ private:
 	bool					useSplineAngles;
 	idEntityPtr<idEntity>	splineEnt;
 	moverCommand_t			lastCommand;
-	float					damage;
 
+private:
 	qhandle_t				areaPortal;		// 0 = no portal
 
-	idList< idEntityPtr<idEntity> >	guiTargets;
+	idList<idEntityPtr<idEntity>>	guiTargets;
 
 	void					VectorForDir( float dir, idVec3 &vec );
-	idCurve_Spline<idVec3> *GetSpline( idEntity *splineEntity ) const;
 
 	void					Event_SetCallback( void );
 	void					Event_TeamBlocked( idEntity *blockedPart, idEntity *blockingEntity );
@@ -198,6 +204,10 @@ private:
 	void					Event_IsRotating( void );
 };
 
+// =====================================================
+//	idSplinePath
+// =====================================================
+
 class idSplinePath : public idEntity {
 public:
 	CLASS_PROTOTYPE( idSplinePath );
@@ -207,12 +217,15 @@ public:
 	void					Spawn( void );
 };
 
-
 struct floorInfo_s {
 	idVec3					pos;
 	idStr					door;
 	int						floor;
 };
+
+// =====================================================
+//	idElevator
+// =====================================================
 
 class idElevator : public idMover {
 public:
@@ -227,14 +240,13 @@ public:
 
 	virtual bool			HandleSingleGuiCommand( idEntity *entityGui, idLexer *src );
 	void					Event_GotoFloor( int floor );
-	floorInfo_s *			GetFloorInfo( int floor );
+	floorInfo_s				*GetFloorInfo( int floor );
 
 protected:
 	virtual void			DoneMoving( void );
 	virtual void			BeginMove( idThread *thread = NULL );
-	void					SpawnTrigger( const idVec3 &pos );
-	void					GetLocalTriggerPosition();
 	void					Event_Touch( idEntity *other, trace_t *trace );
+	void					Event_PartBlocked( idEntity *blockingEntity );
 
 private:
 	typedef enum {
@@ -253,7 +265,7 @@ private:
 	int						returnFloor;
 	int						lastTouchTime;
 
-	class idDoor *			GetDoor( const char *name );
+	class idDoor			*GetDoor( const char *name );
 	void					Think( void );
 	void					OpenInnerDoor( void );
 	void					OpenFloorDoor( int floor );
@@ -264,14 +276,13 @@ private:
 	void					Event_TeamBlocked( idEntity *blockedEntity, idEntity *blockingEntity );
 	void					Event_Activate( idEntity *activator );
 	void					Event_PostFloorArrival();
-
+	void					Event_SetGuiStates();
 };
-
 
 /*
 ===============================================================================
 
-  Binary movers.
+	Binary movers.
 
 ===============================================================================
 */
@@ -282,6 +293,10 @@ typedef enum {
 	MOVER_1TO2,
 	MOVER_2TO1
 } moverState_t;
+
+// =====================================================
+//	idMover_Binary
+// =====================================================
 
 class idMover_Binary : public idEntity {
 public:
@@ -306,8 +321,8 @@ public:
 	void					Use_BinaryMover( idEntity *activator );
 	void					SetGuiStates( const char *state );
 	void					UpdateBuddies( int val );
-	idMover_Binary *		GetActivateChain( void ) const { return activateChain; }
-	idMover_Binary *		GetMoveMaster( void ) const { return moveMaster; }
+	idMover_Binary			*GetActivateChain( void ) const { return activateChain; }
+	idMover_Binary			*GetMoveMaster( void ) const { return moveMaster; }
 	void					BindTeam( idEntity *bindTo );
 	void					SetBlocked( bool b );
 	bool					IsBlocked( void );
@@ -322,8 +337,8 @@ protected:
 	idVec3					pos1;
 	idVec3					pos2;
 	moverState_t			moverState;
-	idMover_Binary *		moveMaster;
-	idMover_Binary *		activateChain;
+	idMover_Binary			*moveMaster;
+	idMover_Binary			*activateChain;
 	int						soundPos1;
 	int						sound1to2;
 	int						sound2to1;
@@ -344,7 +359,8 @@ protected:
 	idPhysics_Parametric	physicsObj;
 	qhandle_t				areaPortal;			// 0 = no portal
 	bool					blocked;
-	idList< idEntityPtr<idEntity> >	guiTargets;
+	bool					playerOnly;
+	idList<idEntityPtr<idEntity>>	guiTargets;
 
 	void					MatchActivateTeam( moverState_t newstate, int time );
 	void					JoinActivateTeam( idMover_Binary *master );
@@ -370,6 +386,10 @@ protected:
 	static void				GetMovedir( float dir, idVec3 &movedir );
 };
 
+// =====================================================
+//	idDoor
+// =====================================================
+
 class idDoor : public idMover_Binary {
 public:
 	CLASS_PROTOTYPE( idDoor );
@@ -390,6 +410,7 @@ public:
 
 	bool					IsOpen( void );
 	bool					IsNoTouch( void );
+	bool					AllowPlayerOnly( idEntity *ent );
 	int						IsLocked( void );
 	void					Lock( int f );
 	void					Use( idEntity *other, idEntity *activator );
@@ -403,8 +424,8 @@ private:
 	bool					noTouch;
 	bool					aas_area_closed;
 	idStr					buddyStr;
-	idClipModel *			trigger;
-	idClipModel *			sndTrigger;
+	idClipModel				*trigger;
+	idClipModel				*sndTrigger;
 	int						nextSndTriggerTime;
 	idVec3					localTriggerOrigin;
 	idMat3					localTriggerAxis;
@@ -412,7 +433,7 @@ private:
 	int						removeItem;
 	idStr					syncLock;
 	int						normalAxisIndex;		// door faces X or Y for spectator teleports
-	idDoor *				companionDoor;
+	idDoor					*companionDoor;
 
 	void					SetAASAreaState( bool closed );
 
@@ -437,6 +458,10 @@ private:
 	void					Event_ClosePortal( void );
 };
 
+// =====================================================
+//	idPlat
+// =====================================================
+
 class idPlat : public idMover_Binary {
 public:
 	CLASS_PROTOTYPE( idPlat );
@@ -454,7 +479,7 @@ public:
 	virtual void			PostBind( void );
 
 private:
-	idClipModel *			trigger;
+	idClipModel				*trigger;
 	idVec3					localTriggerOrigin;
 	idMat3					localTriggerAxis;
 
@@ -466,7 +491,6 @@ private:
 	void					Event_Touch( idEntity *other, trace_t *trace );
 };
 
-
 /*
 ===============================================================================
 
@@ -475,11 +499,16 @@ private:
 ===============================================================================
 */
 
+// =====================================================
+//	idMover_Periodic
+// =====================================================
+
 class idMover_Periodic : public idEntity {
 public:
 	CLASS_PROTOTYPE( idMover_Periodic );
 
 							idMover_Periodic( void );
+							~idMover_Periodic( void );
 
 	void					Spawn( void );
 
@@ -499,6 +528,10 @@ protected:
 	void					Event_PartBlocked( idEntity *blockingEntity );
 };
 
+// =====================================================
+//	idRotater
+// =====================================================
+
 class idRotater : public idMover_Periodic {
 public:
 	CLASS_PROTOTYPE( idRotater );
@@ -516,6 +549,10 @@ private:
 	void					Event_Activate( idEntity *activator );
 };
 
+// =====================================================
+//	idBobber
+// =====================================================
+
 class idBobber : public idMover_Periodic {
 public:
 	CLASS_PROTOTYPE( idBobber );
@@ -523,9 +560,11 @@ public:
 							idBobber( void );
 
 	void					Spawn( void );
-
-private:
 };
+
+// =====================================================
+//	idPendulum
+// =====================================================
 
 class idPendulum : public idMover_Periodic {
 public:
@@ -534,9 +573,11 @@ public:
 							idPendulum( void );
 
 	void					Spawn( void );
-
-private:
 };
+
+// =====================================================
+//	idRiser
+// =====================================================
 
 class idRiser : public idMover_Periodic {
 public:

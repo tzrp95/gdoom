@@ -44,9 +44,10 @@ If you have questions concerning this license or the applicable additional terms
 /*
 ===============================================================================
 
-idTarget
+	idTarget
 
-Invisible entities that affect other entities or the world when activated.
+	Invisible entities that affect other entities 
+	or the world when activated.
 
 ===============================================================================
 */
@@ -54,11 +55,10 @@ Invisible entities that affect other entities or the world when activated.
 CLASS_DECLARATION( idEntity, idTarget )
 END_CLASS
 
-
 /*
 ===============================================================================
 
-idTarget_Remove
+	idTarget_Remove
 
 ===============================================================================
 */
@@ -76,7 +76,7 @@ void idTarget_Remove::Event_Activate( idEntity *activator ) {
 	int			i;
 	idEntity	*ent;
 
-	for( i = 0; i < targets.Num(); i++ ) {
+	for ( i = 0; i < targets.Num(); i++ ) {
 		ent = targets[ i ].GetEntity();
 		if ( ent ) {
 			ent->PostEventMS( &EV_Remove, 0 );
@@ -87,11 +87,10 @@ void idTarget_Remove::Event_Activate( idEntity *activator ) {
 	PostEventMS( &EV_Remove, 0 );
 }
 
-
 /*
 ===============================================================================
 
-idTarget_Show
+	idTarget_Show
 
 ===============================================================================
 */
@@ -109,7 +108,7 @@ void idTarget_Show::Event_Activate( idEntity *activator ) {
 	int			i;
 	idEntity	*ent;
 
-	for( i = 0; i < targets.Num(); i++ ) {
+	for ( i = 0; i < targets.Num(); i++ ) {
 		ent = targets[ i ].GetEntity();
 		if ( ent ) {
 			ent->Show();
@@ -120,11 +119,10 @@ void idTarget_Show::Event_Activate( idEntity *activator ) {
 	PostEventMS( &EV_Remove, 0 );
 }
 
-
 /*
 ===============================================================================
 
-idTarget_Damage
+	idTarget_Damage
 
 ===============================================================================
 */
@@ -143,20 +141,19 @@ void idTarget_Damage::Event_Activate( idEntity *activator ) {
 	const char *damage;
 	idEntity *	ent;
 
-	damage = spawnArgs.GetString( "def_damage", "damage_generic" );
-	for( i = 0; i < targets.Num(); i++ ) {
+	for ( i = 0; i < targets.Num(); i++ ) {
 		ent = targets[ i ].GetEntity();
 		if ( ent ) {
+			damage = spawnArgs.GetString( "def_damage", "damage_generic" );
 			ent->Damage( this, this, vec3_origin, damage, 1.0f, INVALID_JOINT );
 		}
 	}
 }
 
-
 /*
 ===============================================================================
 
-idTarget_SessionCommand
+	idTarget_SessionCommand
 
 ===============================================================================
 */
@@ -174,13 +171,13 @@ void idTarget_SessionCommand::Event_Activate( idEntity *activator ) {
 	gameLocal.sessionCommand = spawnArgs.GetString( "command" );
 }
 
-
 /*
 ===============================================================================
 
-idTarget_EndLevel
+	idTarget_EndLevel
 
-Just a modified form of idTarget_SessionCommand
+	Just a modified form of idTarget_SessionCommand
+
 ===============================================================================
 */
 
@@ -216,11 +213,10 @@ void idTarget_EndLevel::Event_Activate( idEntity *activator ) {
 	gameLocal.sessionCommand += nextMap;
 }
 
-
 /*
 ===============================================================================
 
-idTarget_WaitForButton
+	idTarget_WaitForButton
 
 ===============================================================================
 */
@@ -254,7 +250,7 @@ void idTarget_WaitForButton::Think( void ) {
 
 	if ( thinkFlags & TH_THINK ) {
 		player = gameLocal.GetLocalPlayer();
-		if ( player && !( player->oldButtons & BUTTON_ATTACK ) && ( player->usercmd.buttons & BUTTON_ATTACK ) ) {
+		if ( player != NULL && ( !( player->oldButtons & BUTTON_ATTACK ) ) && ( player->usercmd.buttons & BUTTON_ATTACK ) ) {
 			player->usercmd.buttons &= ~BUTTON_ATTACK;
 			BecomeInactive( TH_THINK );
 			ActivateTargets( player );
@@ -264,11 +260,10 @@ void idTarget_WaitForButton::Think( void ) {
 	}
 }
 
-
 /*
 ===============================================================================
 
-idTarget_SetGlobalShaderParm
+	idTarget_SetGlobalShaderParm
 
 ===============================================================================
 */
@@ -293,7 +288,7 @@ void idTarget_SetGlobalShaderTime::Event_Activate( idEntity *activator ) {
 /*
 ===============================================================================
 
-idTarget_SetShaderParm
+	idTarget_SetShaderParm
 
 ===============================================================================
 */
@@ -309,14 +304,14 @@ idTarget_SetShaderParm::Event_Activate
 */
 void idTarget_SetShaderParm::Event_Activate( idEntity *activator ) {
 	int			i;
-	idEntity *	ent;
+	idEntity	*ent;
 	float		value;
 	idVec3		color;
 	int			parmnum;
 
 	// set the color on the targets
 	if ( spawnArgs.GetVector( "_color", "1 1 1", color ) ) {
-		for( i = 0; i < targets.Num(); i++ ) {
+		for ( i = 0; i < targets.Num(); i++ ) {
 			ent = targets[ i ].GetEntity();
 			if ( ent ) {
 				ent->SetColor( color[ 0 ], color[ 1 ], color[ 2 ] );
@@ -325,29 +320,28 @@ void idTarget_SetShaderParm::Event_Activate( idEntity *activator ) {
 	}
 
 	// set any shader parms on the targets
-	for( parmnum = 0; parmnum < MAX_ENTITY_SHADER_PARMS; parmnum++ ) {
+	for ( parmnum = 0; parmnum < MAX_ENTITY_SHADER_PARMS; parmnum++ ) {
 		if ( spawnArgs.GetFloat( va( "shaderParm%d", parmnum ), "0", value ) ) {
-			for( i = 0; i < targets.Num(); i++ ) {
+			for ( i = 0; i < targets.Num(); i++ ) {
 				ent = targets[ i ].GetEntity();
 				if ( ent ) {
 					ent->SetShaderParm( parmnum, value );
 				}
 			}
-			if (spawnArgs.GetBool("toggle") && (value == 0 || value == 1)) {
+			if ( spawnArgs.GetBool( "toggle" ) && ( value == 0 || value == 1 ) ) {
 				int val = value;
 				val ^= 1;
 				value = val;
-				spawnArgs.SetFloat(va("shaderParm%d", parmnum), value);
+				spawnArgs.SetFloat( va( "shaderParm%d", parmnum ), value );
 			}
 		}
 	}
 }
 
-
 /*
 ===============================================================================
 
-idTarget_SetShaderTime
+	idTarget_SetShaderTime
 
 ===============================================================================
 */
@@ -367,12 +361,12 @@ void idTarget_SetShaderTime::Event_Activate( idEntity *activator ) {
 	float		time;
 
 	time = -MS2SEC( gameLocal.time );
-	for( i = 0; i < targets.Num(); i++ ) {
+	for ( i = 0; i < targets.Num(); i++ ) {
 		ent = targets[ i ].GetEntity();
 		if ( ent ) {
 			ent->SetShaderParm( SHADERPARM_TIMEOFFSET, time );
 			if ( ent->IsType( idLight::Type ) ) {
-				static_cast<idLight *>(ent)->SetLightParm( SHADERPARM_TIMEOFFSET, time );
+				static_cast<idLight*>( ent )->SetLightParm( SHADERPARM_TIMEOFFSET, time );
 			}
 		}
 	}
@@ -381,7 +375,7 @@ void idTarget_SetShaderTime::Event_Activate( idEntity *activator ) {
 /*
 ===============================================================================
 
-idTarget_FadeEntity
+	idTarget_FadeEntity
 
 ===============================================================================
 */
@@ -441,7 +435,7 @@ void idTarget_FadeEntity::Event_Activate( idEntity *activator ) {
 	BecomeActive( TH_THINK );
 
 	ent = this;
-	for( i = 0; i < targets.Num(); i++ ) {
+	for ( i = 0; i < targets.Num(); i++ ) {
 		ent = targets[ i ].GetEntity();
 		if ( ent ) {
 			ent->GetColor( fadeFrom );
@@ -476,7 +470,7 @@ void idTarget_FadeEntity::Think( void ) {
 		}
 
 		// set the color on the targets
-		for( i = 0; i < targets.Num(); i++ ) {
+		for ( i = 0; i < targets.Num(); i++ ) {
 			ent = targets[ i ].GetEntity();
 			if ( ent ) {
 				ent->SetColor( color );
@@ -490,7 +484,7 @@ void idTarget_FadeEntity::Think( void ) {
 /*
 ===============================================================================
 
-idTarget_LightFadeIn
+	idTarget_LightFadeIn
 
 ===============================================================================
 */
@@ -505,10 +499,10 @@ idTarget_LightFadeIn::Event_Activate
 ================
 */
 void idTarget_LightFadeIn::Event_Activate( idEntity *activator ) {
-	idEntity *ent;
-	idLight *light;
-	int i;
-	float time;
+	idEntity	*ent;
+	idLight		*light;
+	int			i;
+	float		time;
 
 	if ( !targets.Num() ) {
 		return;
@@ -533,7 +527,7 @@ void idTarget_LightFadeIn::Event_Activate( idEntity *activator ) {
 /*
 ===============================================================================
 
-idTarget_LightFadeOut
+	idTarget_LightFadeOut
 
 ===============================================================================
 */
@@ -548,10 +542,10 @@ idTarget_LightFadeOut::Event_Activate
 ================
 */
 void idTarget_LightFadeOut::Event_Activate( idEntity *activator ) {
-	idEntity *ent;
-	idLight *light;
-	int i;
-	float time;
+	idEntity	*ent;
+	idLight		*light;
+	int			i;
+	float		time;
 
 	if ( !targets.Num() ) {
 		return;
@@ -576,7 +570,7 @@ void idTarget_LightFadeOut::Event_Activate( idEntity *activator ) {
 /*
 ===============================================================================
 
-idTarget_Give
+	idTarget_Give
 
 ===============================================================================
 */
@@ -602,7 +596,6 @@ idTarget_Give::Event_Activate
 ================
 */
 void idTarget_Give::Event_Activate( idEntity *activator ) {
-
 	if ( spawnArgs.GetBool( "development" ) && developer.GetInteger() == 0 ) {
 		return;
 	}
@@ -619,7 +612,7 @@ void idTarget_Give::Event_Activate( idEntity *activator ) {
 				d2.Set( "name", va( "givenitem_%i", giveNum++ ) );
 				idEntity *ent = NULL;
 				if ( gameLocal.SpawnEntityDef( d2, &ent ) && ent && ent->IsType( idItem::Type ) ) {
-					idItem *item = static_cast<idItem*>(ent);
+					idItem *item = static_cast<idItem*>( ent );
 					item->GiveToPlayer( gameLocal.GetLocalPlayer() );
 				}
 			}
@@ -631,13 +624,13 @@ void idTarget_Give::Event_Activate( idEntity *activator ) {
 /*
 ===============================================================================
 
-idTarget_GiveEmail
+	idTarget_GiveEmail
 
 ===============================================================================
 */
 
 CLASS_DECLARATION( idTarget, idTarget_GiveEmail )
-EVENT( EV_Activate,				idTarget_GiveEmail::Event_Activate )
+	EVENT( EV_Activate,				idTarget_GiveEmail::Event_Activate )
 END_CLASS
 
 /*
@@ -663,11 +656,10 @@ void idTarget_GiveEmail::Event_Activate( idEntity *activator ) {
 	}
 }
 
-
 /*
 ===============================================================================
 
-idTarget_SetModel
+	idTarget_SetModel
 
 ===============================================================================
 */
@@ -684,7 +676,7 @@ idTarget_SetModel::Spawn
 void idTarget_SetModel::Spawn( void ) {
 	const char *model;
 
-	model = spawnArgs.GetString( "newmodel" );
+	model = spawnArgs.GetString("newmodel");
 	if ( declManager->FindType( DECL_MODELDEF, model, false ) == NULL ) {
 		// precache the render model
 		renderModelManager->FindModel( model );
@@ -699,7 +691,7 @@ idTarget_SetModel::Event_Activate
 ================
 */
 void idTarget_SetModel::Event_Activate( idEntity *activator ) {
-	for( int i = 0; i < targets.Num(); i++ ) {
+	for ( int i = 0; i < targets.Num(); i++ ) {
 		idEntity *ent = targets[ i ].GetEntity();
 		if ( ent ) {
 			ent->SetModel( spawnArgs.GetString( "newmodel" ) );
@@ -711,7 +703,7 @@ void idTarget_SetModel::Event_Activate( idEntity *activator ) {
 /*
 ===============================================================================
 
-idTarget_SetInfluence
+	idTarget_SetInfluence
 
 ===============================================================================
 */
@@ -752,22 +744,22 @@ void idTarget_SetInfluence::Save( idSaveGame *savefile ) const {
 	int i;
 
 	savefile->WriteInt( lightList.Num() );
-	for( i = 0; i < lightList.Num(); i++ ) {
+	for ( i = 0; i < lightList.Num(); i++ ) {
 		savefile->WriteInt( lightList[ i ] );
 	}
 
 	savefile->WriteInt( guiList.Num() );
-	for( i = 0; i < guiList.Num(); i++ ) {
+	for ( i = 0; i < guiList.Num(); i++ ) {
 		savefile->WriteInt( guiList[ i ] );
 	}
 
 	savefile->WriteInt( soundList.Num() );
-	for( i = 0; i < soundList.Num(); i++ ) {
+	for ( i = 0; i < soundList.Num(); i++ ) {
 		savefile->WriteInt( soundList[ i ] );
 	}
 
 	savefile->WriteInt( genericList.Num() );
-	for( i = 0; i < genericList.Num(); i++ ) {
+	for ( i = 0; i < genericList.Num(); i++ ) {
 		savefile->WriteInt( genericList[ i ] );
 	}
 
@@ -788,6 +780,13 @@ void idTarget_SetInfluence::Save( idSaveGame *savefile ) const {
 
 	savefile->WriteBool( soundFaded );
 	savefile->WriteBool( restoreOnTrigger );
+
+	savefile->WriteInt( savedGuiList.Num() );
+	for ( i = 0; i < savedGuiList.Num(); i++ ) {
+		for ( int j = 0; j < MAX_RENDERENTITY_GUI; j++ ) {
+			savefile->WriteUserInterface( savedGuiList[i].gui[j], savedGuiList[i].gui[j] ? savedGuiList[i].gui[j]->IsUniqued() : false );
+		}
+	}
 }
 
 /*
@@ -801,19 +800,19 @@ void idTarget_SetInfluence::Restore( idRestoreGame *savefile ) {
 	float set;
 
 	savefile->ReadInt( num );
-	for( i = 0; i < num; i++ ) {
+	for ( i = 0; i < num; i++ ) {
 		savefile->ReadInt( itemNum );
 		lightList.Append( itemNum );
 	}
 
 	savefile->ReadInt( num );
-	for( i = 0; i < num; i++ ) {
+	for ( i = 0; i < num; i++ ) {
 		savefile->ReadInt( itemNum );
 		guiList.Append( itemNum );
 	}
 
 	savefile->ReadInt( num );
-	for( i = 0; i < num; i++ ) {
+	for ( i = 0; i < num; i++ ) {
 		savefile->ReadInt( itemNum );
 		soundList.Append( itemNum );
 	}
@@ -832,7 +831,7 @@ void idTarget_SetInfluence::Restore( idRestoreGame *savefile ) {
 	savefile->ReadString( flashInSound );
 	savefile->ReadString( flashOutSound );
 
-	savefile->ReadObject( reinterpret_cast<idClass *&>( switchToCamera ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( switchToCamera ) );
 
 	savefile->ReadFloat( set );
 	fovSetting.SetStartTime( set );
@@ -845,6 +844,15 @@ void idTarget_SetInfluence::Restore( idRestoreGame *savefile ) {
 
 	savefile->ReadBool( soundFaded );
 	savefile->ReadBool( restoreOnTrigger );
+
+	savefile->ReadInt( num );
+	for ( i = 0; i < num; i++ ) {
+		SavedGui_t temp;
+		for ( int j = 0; j < MAX_RENDERENTITY_GUI; j++ ) {
+			savefile->ReadUserInterface( temp.gui[j] );
+		}
+		savedGuiList.Append( temp );
+	}
 }
 
 /*
@@ -885,7 +893,6 @@ void idTarget_SetInfluence::Event_Flash( float flash, int out ) {
 	PostEventSec( &EV_ClearFlash, flash, flash );
 }
 
-
 /*
 ================
 idTarget_SetInfluence::Event_ClearFlash
@@ -914,6 +921,7 @@ void idTarget_SetInfluence::Event_GatherEntities() {
 	lightList.Clear();
 	guiList.Clear();
 	soundList.Clear();
+	savedGuiList.Clear();
 
 	if ( spawnArgs.GetBool( "effect_all" ) ) {
 		lights = sounds = guis = models = vision = true;
@@ -929,7 +937,7 @@ void idTarget_SetInfluence::Event_GatherEntities() {
 		listedEntities = gameLocal.EntitiesWithinRadius( GetPhysics()->GetOrigin(), radius, entityList, MAX_GENTITIES );
 	}
 
-	for( i = 0; i < listedEntities; i++ ) {
+	for ( i = 0; i < listedEntities; i++ ) {
 		idEntity *ent = entityList[ i ];
 		if ( ent ) {
 			if ( lights && ent->IsType( idLight::Type ) && ent->spawnArgs.FindKey( "color_demonic" ) ) {
@@ -942,6 +950,8 @@ void idTarget_SetInfluence::Event_GatherEntities() {
 			}
 			if ( guis && ent->GetRenderEntity() && ent->GetRenderEntity()->gui[ 0 ] && ent->spawnArgs.FindKey( "gui_demonic" ) ) {
 				guiList.Append( ent->entityNumber );
+				SavedGui_t temp;
+				savedGuiList.Append( temp );
 				continue;
 			}
 			if ( ent->IsType( idStaticEntity::Type ) && ent->spawnArgs.FindKey( "color_demonic" ) ) {
@@ -950,10 +960,9 @@ void idTarget_SetInfluence::Event_GatherEntities() {
 			}
 		}
 	}
-	idStr temp;
-	temp = spawnArgs.GetString( "switchToView" );
-	switchToCamera = ( temp.Length() ) ? gameLocal.FindEntity( temp ) : NULL;
 
+	idStr temp = spawnArgs.GetString( "switchToView" );
+	switchToCamera = ( temp.Length() ) ? gameLocal.FindEntity( temp ) : NULL;
 }
 
 /*
@@ -972,7 +981,7 @@ void idTarget_SetInfluence::Event_Activate( idEntity *activator ) {
 	bool update;
 	idVec3 color;
 	idVec4 colorTo;
-	idPlayer *player;
+	idPlayer* player;
 
 	player = gameLocal.GetLocalPlayer();
 
@@ -986,7 +995,6 @@ void idTarget_SetInfluence::Event_Activate( idEntity *activator ) {
 	}
 
 	float fadeTime = spawnArgs.GetFloat( "fadeWorldSounds" );
-
 	if ( delay > 0.0f ) {
 		PostEventSec( &EV_Activate, delay, activator );
 		delay = 0.0f;
@@ -1010,7 +1018,7 @@ void idTarget_SetInfluence::Event_Activate( idEntity *activator ) {
 	}
 
 	parm = spawnArgs.GetString( "snd_influence" );
-	if ( parm && *parm ) {
+	if ( parm != NULL && *parm != '\0' ) {
 		PostEventSec( &EV_StartSoundShader, flashIn, parm, SND_CHANNEL_ANY );
 	}
 
@@ -1040,9 +1048,9 @@ void idTarget_SetInfluence::Event_Activate( idEntity *activator ) {
 		if ( ent == NULL || !ent->IsType( idLight::Type ) ) {
 			continue;
 		}
-		light = static_cast<idLight *>(ent);
+		light = static_cast<idLight*>( ent );
 		parm = light->spawnArgs.GetString( "mat_demonic" );
-		if ( parm && *parm ) {
+		if ( parm != NULL && *parm != '\0' ) {
 			light->SetShader( parm );
 		}
 
@@ -1057,9 +1065,9 @@ void idTarget_SetInfluence::Event_Activate( idEntity *activator ) {
 		if ( ent == NULL || !ent->IsType( idSound::Type ) ) {
 			continue;
 		}
-		sound = static_cast<idSound *>(ent);
+		sound = static_cast<idSound*>( ent );
 		parm = sound->spawnArgs.GetString( "snd_demonic" );
-		if ( parm && *parm ) {
+		if ( parm != NULL && *parm != '\0' ) {
 			if ( sound->spawnArgs.GetBool( "overlayDemonic" ) ) {
 				sound->StartSound( "snd_demonic", SND_CHANNEL_DEMONIC, 0, false, NULL );
 			} else {
@@ -1075,8 +1083,11 @@ void idTarget_SetInfluence::Event_Activate( idEntity *activator ) {
 			continue;
 		}
 		update = false;
+
 		for ( j = 0; j < MAX_RENDERENTITY_GUI; j++ ) {
 			if ( ent->GetRenderEntity()->gui[ j ] && ent->spawnArgs.FindKey( j == 0 ? "gui_demonic" : va( "gui_demonic%d", j+1 ) ) ) {
+				// Backup the old one
+				savedGuiList[i].gui[j] = ent->GetRenderEntity()->gui[ j ];
 				ent->GetRenderEntity()->gui[ j ] = uiManager->FindGui( ent->spawnArgs.GetString( j == 0 ? "gui_demonic" : va( "gui_demonic%d", j+1 ) ), true );
 				update = true;
 			}
@@ -1104,7 +1115,7 @@ void idTarget_SetInfluence::Event_Activate( idEntity *activator ) {
 	}
 
 	parm = spawnArgs.GetString( "mtrWorld" );
-	if ( parm && *parm ) {
+	if ( parm != NULL && *parm != '\0' ) {
 		gameLocal.SetGlobalMaterial( declManager->FindMaterial( parm ) );
 	}
 
@@ -1163,7 +1174,8 @@ void idTarget_SetInfluence::Event_RestoreInfluence() {
 			continue;
 		}
 		generic = static_cast<idStaticEntity*>( ent );
-		colorTo.Set( 1.0f, 1.0f, 1.0f, 1.0f );
+		color = generic->spawnArgs.GetVector( "_color", "1 1 1" );
+		colorTo.Set( color.x, color.y, color.z, 1.0f );
 		generic->Fade( colorTo, spawnArgs.GetFloat( "fade_time", "0.25" ) );
 	}
 
@@ -1172,7 +1184,7 @@ void idTarget_SetInfluence::Event_RestoreInfluence() {
 		if ( ent == NULL || !ent->IsType( idLight::Type ) ) {
 			continue;
 		}
-		light = static_cast<idLight *>(ent);
+		light = static_cast<idLight*>( ent );
 		if ( !light->spawnArgs.GetBool( "leave_demonic_mat" ) ) {
 			const char *texture = light->spawnArgs.GetString( "texture", "lights/squarelight1" );
 			light->SetShader( texture );
@@ -1187,7 +1199,7 @@ void idTarget_SetInfluence::Event_RestoreInfluence() {
 		if ( ent == NULL || !ent->IsType( idSound::Type ) ) {
 			continue;
 		}
-		sound = static_cast<idSound *>(ent);
+		sound = static_cast<idSound*>( ent );
 		sound->StopSound( SND_CHANNEL_ANY, false );
 		sound->SetSound( sound->spawnArgs.GetString( "s_shader" ) );
 	}
@@ -1198,9 +1210,9 @@ void idTarget_SetInfluence::Event_RestoreInfluence() {
 			continue;
 		}
 		update = false;
-		for( j = 0; j < MAX_RENDERENTITY_GUI; j++ ) {
+		for ( j = 0; j < MAX_RENDERENTITY_GUI; j++ ) {
 			if ( ent->GetRenderEntity()->gui[ j ] ) {
-				ent->GetRenderEntity()->gui[ j ] = uiManager->FindGui( ent->spawnArgs.GetString( j == 0 ? "gui" : va( "gui%d", j+1 ) ) );
+				ent->GetRenderEntity()->gui[ j ] = savedGuiList[i].gui[j];
 				update = true;
 			}
 		}
@@ -1219,13 +1231,12 @@ void idTarget_SetInfluence::Event_RestoreInfluence() {
 	if ( fadeTime ) {
 		gameSoundWorld->FadeSoundClasses( 0, 0.0f, fadeTime / 2.0f );
 	}
-
 }
 
 /*
 ===============================================================================
 
-idTarget_SetKeyVal
+	idTarget_SetKeyVal
 
 ===============================================================================
 */
@@ -1246,10 +1257,10 @@ void idTarget_SetKeyVal::Event_Activate( idEntity *activator ) {
 	const idKeyValue *kv;
 	int n;
 
-	for( i = 0; i < targets.Num(); i++ ) {
+	for ( i = 0; i < targets.Num(); i++ ) {
 		ent = targets[ i ].GetEntity();
 		if ( ent ) {
-			kv = spawnArgs.MatchPrefix("keyval");
+			kv = spawnArgs.MatchPrefix( "keyval" );
 			while ( kv ) {
 				n = kv->GetValue().Find( ";" );
 				if ( n > 0 ) {
@@ -1277,7 +1288,7 @@ void idTarget_SetKeyVal::Event_Activate( idEntity *activator ) {
 /*
 ===============================================================================
 
-idTarget_SetFov
+	idTarget_SetFov
 
 ===============================================================================
 */
@@ -1285,7 +1296,6 @@ idTarget_SetFov
 CLASS_DECLARATION( idTarget, idTarget_SetFov )
 	EVENT( EV_Activate,	idTarget_SetFov::Event_Activate )
 END_CLASS
-
 
 /*
 ================
@@ -1352,11 +1362,10 @@ void idTarget_SetFov::Think( void ) {
 	}
 }
 
-
 /*
 ===============================================================================
 
-idTarget_SetPrimaryObjective
+	idTarget_SetPrimaryObjective
 
 ===============================================================================
 */
@@ -1372,7 +1381,7 @@ idTarget_SetPrimaryObjective::Event_Activate
 */
 void idTarget_SetPrimaryObjective::Event_Activate( idEntity *activator ) {
 	idPlayer *player = gameLocal.GetLocalPlayer();
-	if ( player && player->objectiveSystem ) {
+	if ( player != NULL && player->objectiveSystem ) {
 		player->objectiveSystem->SetStateString( "missionobjective", spawnArgs.GetString( "text", common->GetLanguageDict()->GetString( "#str_04253" ) ) );
 	}
 }
@@ -1380,7 +1389,7 @@ void idTarget_SetPrimaryObjective::Event_Activate( idEntity *activator ) {
 /*
 ===============================================================================
 
-idTarget_LockDoor
+	idTarget_LockDoor
 
 ===============================================================================
 */
@@ -1402,7 +1411,7 @@ void idTarget_LockDoor::Event_Activate( idEntity *activator ) {
 	lock = spawnArgs.GetInt( "locked", "1" );
 	for( i = 0; i < targets.Num(); i++ ) {
 		ent = targets[ i ].GetEntity();
-		if ( ent && ent->IsType( idDoor::Type ) ) {
+		if ( ent != NULL && ent->IsType( idDoor::Type ) ) {
 			if ( static_cast<idDoor *>( ent )->IsLocked() ) {
 				static_cast<idDoor *>( ent )->Lock( 0 );
 			} else {
@@ -1415,7 +1424,7 @@ void idTarget_LockDoor::Event_Activate( idEntity *activator ) {
 /*
 ===============================================================================
 
-idTarget_CallObjectFunction
+	idTarget_CallObjectFunction
 
 ===============================================================================
 */
@@ -1437,12 +1446,13 @@ void idTarget_CallObjectFunction::Event_Activate( idEntity *activator ) {
 	idThread			*thread;
 
 	funcName = spawnArgs.GetString( "call" );
-	for( i = 0; i < targets.Num(); i++ ) {
+	for ( i = 0; i < targets.Num(); i++ ) {
 		ent = targets[ i ].GetEntity();
-		if ( ent && ent->scriptObject.HasObject() ) {
+		if ( ent != NULL && ent->scriptObject.HasObject() ) {
 			func = ent->scriptObject.GetFunction( funcName );
-			if ( !func ) {
+			if ( func == NULL ) {
 				gameLocal.Error( "Function '%s' not found on entity '%s' for function call from '%s'", funcName, ent->name.c_str(), name.c_str() );
+				return;
 			}
 			if ( func->type->NumParameters() != 1 ) {
 				gameLocal.Error( "Function '%s' on entity '%s' has the wrong number of parameters for function call from '%s'", funcName, ent->name.c_str(), name.c_str() );
@@ -1458,11 +1468,10 @@ void idTarget_CallObjectFunction::Event_Activate( idEntity *activator ) {
 	}
 }
 
-
 /*
 ===============================================================================
 
-idTarget_EnableLevelWeapons
+	idTarget_EnableLevelWeapons
 
 ===============================================================================
 */
@@ -1483,17 +1492,17 @@ void idTarget_EnableLevelWeapons::Event_Activate( idEntity *activator ) {
 	gameLocal.world->spawnArgs.SetBool( "no_Weapons", spawnArgs.GetBool( "disable" ) );
 
 	if ( spawnArgs.GetBool( "disable" ) ) {
-		for( i = 0; i < gameLocal.numClients; i++ ) {
+		for ( i = 0; i < gameLocal.numClients; i++ ) {
 			if ( gameLocal.entities[ i ] ) {
 				gameLocal.entities[ i ]->ProcessEvent( &EV_Player_DisableWeapon );
 			}
 		}
 	} else {
 		weap = spawnArgs.GetString( "weapon" );
-		for( i = 0; i < gameLocal.numClients; i++ ) {
+		for ( i = 0; i < gameLocal.numClients; i++ ) {
 			if ( gameLocal.entities[ i ] ) {
 				gameLocal.entities[ i ]->ProcessEvent( &EV_Player_EnableWeapon );
-				if ( weap && weap[ 0 ] ) {
+				if ( weap != NULL && weap[ 0 ] != '\0' ) {
 					gameLocal.entities[ i ]->PostEventSec( &EV_Player_SelectWeapon, 0.5f, weap );
 				}
 			}
@@ -1504,7 +1513,7 @@ void idTarget_EnableLevelWeapons::Event_Activate( idEntity *activator ) {
 /*
 ===============================================================================
 
-idTarget_Tip
+	idTarget_Tip
 
 ===============================================================================
 */
@@ -1601,11 +1610,10 @@ void idTarget_Tip::Event_TipOff( void ) {
 	}
 }
 
-
 /*
 ===============================================================================
 
-idTarget_GiveSecurity
+	idTarget_GiveSecurity
 
 ===============================================================================
 */
@@ -1626,11 +1634,10 @@ void idTarget_GiveSecurity::Event_Activate( idEntity *activator ) {
 	}
 }
 
-
 /*
 ===============================================================================
 
-idTarget_RemoveWeapons
+	idTarget_RemoveWeapons
 
 ===============================================================================
 */
@@ -1645,9 +1652,9 @@ idTarget_RemoveWeapons::Event_Activate
 ================
 */
 void idTarget_RemoveWeapons::Event_Activate( idEntity *activator ) {
-	for( int i = 0; i < gameLocal.numClients; i++ ) {
+	for ( int i = 0; i < gameLocal.numClients; i++ ) {
 		if ( gameLocal.entities[ i ] ) {
-			idPlayer *player = static_cast< idPlayer* >( gameLocal.entities[i] );
+			idPlayer *player = static_cast<idPlayer*>( gameLocal.entities[i] );
 			const idKeyValue *kv = spawnArgs.MatchPrefix( "weapon", NULL );
 			while ( kv ) {
 				player->RemoveWeapon( kv->GetValue() );
@@ -1658,11 +1665,10 @@ void idTarget_RemoveWeapons::Event_Activate( idEntity *activator ) {
 	}
 }
 
-
 /*
 ===============================================================================
 
-idTarget_LevelTrigger
+	idTarget_LevelTrigger
 
 ===============================================================================
 */
@@ -1677,19 +1683,18 @@ idTarget_LevelTrigger::Event_Activate
 ================
 */
 void idTarget_LevelTrigger::Event_Activate( idEntity *activator ) {
-	for( int i = 0; i < gameLocal.numClients; i++ ) {
+	for ( int i = 0; i < gameLocal.numClients; i++ ) {
 		if ( gameLocal.entities[ i ] ) {
-			idPlayer *player = static_cast< idPlayer* >( gameLocal.entities[i] );
+			idPlayer *player = static_cast<idPlayer*>( gameLocal.entities[i] );
 			player->SetLevelTrigger( spawnArgs.GetString( "levelName" ), spawnArgs.GetString( "triggerName" ) );
 		}
 	}
 }
 
-
 /*
 ===============================================================================
 
-idTarget_EnableStamina
+	idTarget_EnableStamina
 
 ===============================================================================
 */
@@ -1704,9 +1709,9 @@ idTarget_EnableStamina::Event_Activate
 ================
 */
 void idTarget_EnableStamina::Event_Activate( idEntity *activator ) {
-	for( int i = 0; i < gameLocal.numClients; i++ ) {
+	for ( int i = 0; i < gameLocal.numClients; i++ ) {
 		if ( gameLocal.entities[ i ] ) {
-			idPlayer *player = static_cast< idPlayer* >( gameLocal.entities[i] );
+			idPlayer *player = static_cast<idPlayer*>( gameLocal.entities[i] );
 			if ( spawnArgs.GetBool( "enable" ) ) {
 				pm_stamina.SetFloat( player->spawnArgs.GetFloat( "pm_stamina" ) );
 			} else {
@@ -1719,7 +1724,7 @@ void idTarget_EnableStamina::Event_Activate( idEntity *activator ) {
 /*
 ===============================================================================
 
-idTarget_FadeSoundClass
+	idTarget_FadeSoundClass
 
 ===============================================================================
 */
@@ -1740,6 +1745,7 @@ void idTarget_FadeSoundClass::Event_Activate( idEntity *activator ) {
 	float fadeDB = spawnArgs.GetFloat( "fadeDB" );
 	float fadeDuration = spawnArgs.GetFloat( "fadeDuration" );
 	int fadeClass = spawnArgs.GetInt( "fadeClass" );
+
 	// start any sound fading now
 	if ( fadeTime ) {
 		gameSoundWorld->FadeSoundClasses( fadeClass, spawnArgs.GetBool( "fadeIn" ) ? fadeDB : 0.0f - fadeDB, fadeTime );
@@ -1757,6 +1763,7 @@ idTarget_FadeSoundClass::Event_RestoreVolume
 void idTarget_FadeSoundClass::Event_RestoreVolume() {
 	float fadeTime = spawnArgs.GetFloat( "fadeTime" );
 	float fadeDB = spawnArgs.GetFloat( "fadeDB" );
+
 	// restore volume
 	gameSoundWorld->FadeSoundClasses( 0, fadeDB, fadeTime );
 }

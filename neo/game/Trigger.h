@@ -38,7 +38,7 @@ extern const idEventDef EV_Disable;
 /*
 ===============================================================================
 
-  Trigger base.
+	Trigger base.
 
 ===============================================================================
 */
@@ -52,7 +52,7 @@ public:
 						idTrigger();
 	void				Spawn( void );
 
-	const function_t *	GetScriptFunction( void ) const;
+	const function_t	*GetScriptFunction( void ) const;
 
 	void				Save( idSaveGame *savefile ) const;
 	void				Restore( idRestoreGame *savefile );
@@ -66,14 +66,13 @@ protected:
 	void				Event_Enable( void );
 	void				Event_Disable( void );
 
-	const function_t *	scriptFunction;
+	const function_t	*scriptFunction;
 };
-
 
 /*
 ===============================================================================
 
-  Trigger which can be activated multiple times.
+	Trigger which can be activated multiple times.
 
 ===============================================================================
 */
@@ -89,7 +88,7 @@ public:
 	void				Save( idSaveGame *savefile ) const;
 	void				Restore( idRestoreGame *savefile );
 
-private:
+protected:
 	float				wait;
 	float				random;
 	float				delay;
@@ -109,11 +108,10 @@ private:
 	void				Event_Touch( idEntity *other, trace_t *trace );
 };
 
-
 /*
 ===============================================================================
 
-  Trigger which can only be activated by an entity with a specific name.
+	Trigger which can only be activated by an entity with a specific name.
 
 ===============================================================================
 */
@@ -137,6 +135,7 @@ private:
 	int					nextTriggerTime;
 	bool				triggerFirst;
 	idStr				entityName;
+	bool				testPartialName;
 
 	void				TriggerAction( idEntity *activator );
 	void				Event_TriggerAction( idEntity *activator );
@@ -147,7 +146,7 @@ private:
 /*
 ===============================================================================
 
-  Trigger which repeatedly fires targets.
+	Trigger which repeatedly fires targets.
 
 ===============================================================================
 */
@@ -178,11 +177,11 @@ private:
 	void				Event_Use( idEntity *activator );
 };
 
-
 /*
 ===============================================================================
 
-  Trigger which fires targets after being activated a specific number of times.
+	Trigger which fires targets after being 
+	activated a specific number of times.
 
 ===============================================================================
 */
@@ -207,11 +206,10 @@ private:
 	void				Event_TriggerAction( idEntity *activator );
 };
 
-
 /*
 ===============================================================================
 
-  Trigger which hurts touching entities.
+	Trigger which hurts touching entities.
 
 ===============================================================================
 */
@@ -236,11 +234,10 @@ private:
 	void				Event_Toggle( idEntity *activator );
 };
 
-
 /*
 ===============================================================================
 
-  Trigger which fades the player view.
+	Trigger which fades the player view.
 
 ===============================================================================
 */
@@ -258,7 +255,7 @@ private:
 /*
 ===============================================================================
 
-  Trigger which continuously tests whether other entities are touching it.
+	Trigger which continuously tests whether other entities are touching it.
 
 ===============================================================================
 */
@@ -269,6 +266,7 @@ public:
 	CLASS_PROTOTYPE( idTrigger_Touch );
 
 						idTrigger_Touch( void );
+						~idTrigger_Touch( void );
 
 	void				Spawn( void );
 	virtual void		Think( void );
@@ -282,9 +280,32 @@ public:
 	void				TouchEntities( void );
 
 private:
-	idClipModel *		clipModel;
+	idClipModel			*clipModel;
 
 	void				Event_Trigger( idEntity *activator );
+};
+
+/*
+===============================================================================
+
+	Trigger that responces to CTF flags
+
+===============================================================================
+*/
+class idTrigger_Flag : public idTrigger_Multi {
+public:
+	CLASS_PROTOTYPE( idTrigger_Flag );
+
+						idTrigger_Flag( void );
+	void				Spawn( void );
+
+private:
+	int					team;
+	bool				player;			// flag must be attached/carried by player
+
+	const idEventDef	*eventFlag;
+
+	void				Event_Touch( idEntity *other, trace_t *trace );
 };
 
 #endif /* !__GAME_TRIGGER_H__ */

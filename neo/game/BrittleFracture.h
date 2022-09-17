@@ -37,24 +37,23 @@ If you have questions concerning this license or the applicable additional terms
 /*
 ===============================================================================
 
-B-rep Brittle Fracture - Static entity using the boundary representation
-of the render model which can fracture.
+	B-rep Brittle Fracture - Static entity using the boundary representation
+	of the render model which can fracture.
 
 ===============================================================================
 */
 
 typedef struct shard_s {
-	idClipModel *				clipModel;
+	idClipModel					*clipModel;
 	idFixedWinding				winding;
-	idList<idFixedWinding *>	decals;
+	idList<idFixedWinding*>		decals;
 	idList<bool>				edgeHasNeighbour;
-	idList<struct shard_s *>	neighbours;
+	idList<struct shard_s*>		neighbours;
 	idPhysics_RigidBody			physicsObj;
 	int							droppedTime;
 	bool						atEdge;
 	int							islandNum;
 } shard_t;
-
 
 class idBrittleFracture : public idEntity {
 
@@ -73,10 +72,13 @@ public:
 	virtual void				Think( void );
 	virtual void				ApplyImpulse( idEntity *ent, int id, const idVec3 &point, const idVec3 &impulse );
 	virtual void				AddForce( idEntity *ent, int id, const idVec3 &point, const idVec3 &force );
-	virtual void				AddDamageEffect( const trace_t &collision, const idVec3 &velocity, const char *damageDefName );
-	virtual void				Killed( idEntity *inflictor, idEntity *attacker, int damage, const idVec3 &dir, int location );
 
-	void						ProjectDecal( const idVec3 &point, const idVec3 &dir, const int time, const char *damageDefName );
+	// added soundEnt flag from DentonMod --->
+	virtual void				AddDamageEffect( const trace_t &collision, const idVec3 &velocity, const char *damageDefName, idEntity *soundEnt=NULL );
+	void						ProjectDecal( const idVec3 &point, const idVec3 &dir, const int time, const char *damageDefName, idEntity *soundEnt=NULL  );
+	// <---
+
+	virtual void				Killed( idEntity *inflictor, idEntity *attacker, int damage, const idVec3 &dir, int location );
 	bool						IsBroken( void ) const;
 
 	enum {
@@ -90,8 +92,8 @@ public:
 
 private:
 	// setttings
-	const idMaterial *			material;
-	const idMaterial *			decalMaterial;
+	const idMaterial			*material;
+	const idMaterial			*decalMaterial;
 	float						decalSize;
 	float						maxShardArea;
 	float						maxShatterRadius;
@@ -103,10 +105,11 @@ private:
 	float						friction;
 	float						bouncyness;
 	idStr						fxFracture;
+	bool						isXraySurface;
 
 	// state
 	idPhysics_StaticMulti		physicsObj;
-	idList<shard_t *>			shards;
+	idList<shard_t*>			shards;
 	idBounds					bounds;
 	bool						disableFracture;
 
@@ -123,7 +126,7 @@ private:
 	void						Shatter( const idVec3 &point, const idVec3 &impulse, const int time );
 	void						DropFloatingIslands( const idVec3 &point, const idVec3 &impulse, const int time );
 	void						Break( void );
-	void						Fracture_r( idFixedWinding &w );
+	void						Fracture_r( idFixedWinding &w, idRandom2 &random );
 	void						CreateFractures( const idRenderModel *renderModel );
 	void						FindNeighbours( void );
 

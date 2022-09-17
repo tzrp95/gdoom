@@ -26,32 +26,69 @@ If you have questions concerning this license or the applicable additional terms
 ===========================================================================
 */
 
-#ifndef __GAME_WORLDSPAWN_H__
-#define __GAME_WORLDSPAWN_H__
+#ifndef __GAME_GRABBER_H__
+#define __GAME_GRABBER_H__
 
+
+#include "physics/Force_Grab.h"
 #include "Entity.h"
 
 /*
 ===============================================================================
 
-	World entity.
+	Grabber Object
+	
+	Class to extend idWeapon to include functionality 
+	for manipulating physics objects.
 
 ===============================================================================
 */
 
-class idWorldspawn : public idEntity {
+class idBeam;
+
+class idGrabber : public idEntity {
 public:
-	CLASS_PROTOTYPE( idWorldspawn );
+	CLASS_PROTOTYPE( idGrabber );
 
-					~idWorldspawn();
+							idGrabber( void );
+							~idGrabber( void );
 
-	void			Spawn( void );
+	void					Save( idSaveGame *savefile ) const;
+	void					Restore( idRestoreGame *savefile );
 
-	void			Save( idRestoreGame *savefile );
-	void			Restore( idRestoreGame *savefile );
+	void					Initialize( void );
+	void					SetDragDistance( float dist );
+	int						Update( idPlayer *player, bool hide );
 
 private:
-	void			Event_Remove( void );
+	idEntityPtr<idEntity>	dragEnt;			// entity being dragged
+	idForce_Grab			drag;
+	idVec3					saveGravity;
+
+	int						id;					// id of body being dragged
+	idVec3					localPlayerPoint;	// dragged point in player space
+	idEntityPtr<idPlayer>	owner;
+	int						oldUcmdFlags;
+	bool					holdingAF;
+	bool					shakeForceFlip;
+	int						endTime;
+	int						lastFiredTime;
+	int						dragFailTime;
+	int						startDragTime;
+	float					dragTraceDist;
+	int						savedContents;
+	int						savedClipmask;
+
+	idBeam					*beam;
+	idBeam					*beamTarget;
+
+	int						warpId;
+
+	bool					grabbableAI( const char *aiName );
+	void					StartDrag( idEntity *grabEnt, int id );
+	void					StopDrag( bool dropOnly );
+	void					UpdateBeams( void );
+	void					ApplyShake( void );
 };
 
-#endif /* !__GAME_WORLDSPAWN_H__ */
+#endif

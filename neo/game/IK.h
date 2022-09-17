@@ -37,7 +37,7 @@ class idRestoreGame;
 /*
 ===============================================================================
 
-  IK base class with a simple fast two bone solver.
+	IK base class with a simple fast two bone solver.
 
 ===============================================================================
 */
@@ -64,17 +64,16 @@ public:
 protected:
 	bool					initialized;
 	bool					ik_activate;
-	idEntity *				self;				// entity using the animated model
-	idAnimator *			animator;			// animator on entity
+	idEntity				*self;				// entity using the animated model
+	idAnimator				*animator;			// animator on entity
 	int						modifiedAnim;		// animation modified by the IK
 	idVec3					modelOffset;
 };
 
-
 /*
 ===============================================================================
 
-  IK controller for a walking character with an arbitrary number of legs.
+	IK controller for a walking character with an arbitrary number of legs.
 
 ===============================================================================
 */
@@ -98,9 +97,9 @@ public:
 	void					DisableLeg( int num );
 
 private:
-	static const int		MAX_LEGS		= 8;
+	static const int		MAX_LEGS = 8;
 
-	idClipModel *			footModel;
+	idClipModel				*footModel;
 
 	int						numLegs;
 	int						enabledLegs;
@@ -141,11 +140,10 @@ private:
 	idVec3					waistOffset;
 };
 
-
 /*
 ===============================================================================
 
-  IK controller for reaching a position with an arm or leg.
+	IK controller for reaching a position with an arm or leg.
 
 ===============================================================================
 */
@@ -165,7 +163,7 @@ public:
 
 private:
 
-	static const int		MAX_ARMS	= 2;
+	static const int		MAX_ARMS = 2;
 
 	int						numArms;
 	int						enabledArms;

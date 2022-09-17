@@ -27,6 +27,7 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 #include "sys/platform.h"
+
 #include "script/Script_Thread.h"
 #include "Player.h"
 
@@ -35,7 +36,7 @@ If you have questions concerning this license or the applicable additional terms
 /*
 ===============================================================================
 
-  idTrigger
+	idTrigger
 
 ===============================================================================
 */
@@ -67,13 +68,13 @@ void idTrigger::DrawDebugInfo( void ) {
 
 	viewTextBounds.ExpandSelf( 128.0f );
 	viewBounds.ExpandSelf( 512.0f );
-	for( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
+	for ( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
 		if ( ent->GetPhysics()->GetContents() & ( CONTENTS_TRIGGER | CONTENTS_FLASHLIGHT_TRIGGER ) ) {
 			show = viewBounds.IntersectsBounds( ent->GetPhysics()->GetAbsBounds() );
 			if ( !show ) {
-				for( i = 0; i < ent->targets.Num(); i++ ) {
+				for ( i = 0; i < ent->targets.Num(); i++ ) {
 					target = ent->targets[ i ].GetEntity();
-					if ( target && viewBounds.IntersectsBounds( target->GetPhysics()->GetAbsBounds() ) ) {
+					if ( target != NULL && viewBounds.IntersectsBounds( target->GetPhysics()->GetAbsBounds() ) ) {
 						show = true;
 						break;
 					}
@@ -89,7 +90,7 @@ void idTrigger::DrawDebugInfo( void ) {
 				gameRenderWorld->DrawText( ent->name.c_str(), ent->GetPhysics()->GetAbsBounds().GetCenter(), 0.1f, colorWhite, axis, 1 );
 				gameRenderWorld->DrawText( ent->GetEntityDefName(), ent->GetPhysics()->GetAbsBounds().GetCenter() + up, 0.1f, colorWhite, axis, 1 );
 				if ( ent->IsType( idTrigger::Type ) ) {
-					func = static_cast<idTrigger *>( ent )->GetScriptFunction();
+					func = static_cast<idTrigger*>( ent )->GetScriptFunction();
 				} else {
 					func = NULL;
 				}
@@ -99,7 +100,7 @@ void idTrigger::DrawDebugInfo( void ) {
 				}
 			}
 
-			for( i = 0; i < ent->targets.Num(); i++ ) {
+			for ( i = 0; i < ent->targets.Num(); i++ ) {
 				target = ent->targets[ i ].GetEntity();
 				if ( target ) {
 					gameRenderWorld->DebugArrow( colorYellow, ent->GetPhysics()->GetAbsBounds().GetCenter(), target->GetPhysics()->GetOrigin(), 10, 0 );
@@ -181,7 +182,7 @@ void idTrigger::Restore( idRestoreGame *savefile ) {
 	if ( funcname.Length() ) {
 		scriptFunction = gameLocal.program.FindFunction( funcname );
 		if ( scriptFunction == NULL ) {
-			gameLocal.Warning( "idTrigger_Multi '%s' at (%s) calls unknown function '%s'", name.c_str(), GetPhysics()->GetOrigin().ToString(0), funcname.c_str() );
+			gameLocal.Warning( "idTrigger_Multi '%s' at (%s) calls unknown function '%s'", name.c_str(), GetPhysics()->GetOrigin().ToString( 0 ), funcname.c_str() );
 		}
 	} else {
 		scriptFunction = NULL;
@@ -227,18 +228,17 @@ void idTrigger::Spawn( void ) {
 	if ( funcname.Length() ) {
 		scriptFunction = gameLocal.program.FindFunction( funcname );
 		if ( scriptFunction == NULL ) {
-			gameLocal.Warning( "trigger '%s' at (%s) calls unknown function '%s'", name.c_str(), GetPhysics()->GetOrigin().ToString(0), funcname.c_str() );
+			gameLocal.Warning( "trigger '%s' at (%s) calls unknown function '%s'", name.c_str(), GetPhysics()->GetOrigin().ToString( 0 ), funcname.c_str() );
 		}
 	} else {
 		scriptFunction = NULL;
 	}
 }
 
-
 /*
 ===============================================================================
 
-  idTrigger_Multi
+	idTrigger_Multi
 
 ===============================================================================
 */
@@ -315,7 +315,7 @@ idTrigger_Multi::Spawn
 "wait" : Seconds between triggerings, 0.5 default, -1 = one time only.
 "call" : Script function to call when triggered
 "random"	wait variance, default is 0
-Variable sized repeatable trigger.  Must be targeted at one or more entities.
+Variable sized repeatable trigger. Must be targeted at one or more entities.
 so, the basic time between firing is a random time between
 (wait - random) and (wait + random)
 ================
@@ -328,12 +328,12 @@ void idTrigger_Multi::Spawn( void ) {
 
 	if ( random && ( random >= wait ) && ( wait >= 0 ) ) {
 		random = wait - 1;
-		gameLocal.Warning( "idTrigger_Multi '%s' at (%s) has random >= wait", name.c_str(), GetPhysics()->GetOrigin().ToString(0) );
+		gameLocal.Warning( "idTrigger_Multi '%s' at (%s) has random >= wait", name.c_str(), GetPhysics()->GetOrigin().ToString( 0 ) );
 	}
 
 	if ( random_delay && ( random_delay >= delay ) && ( delay >= 0 ) ) {
 		random_delay = delay - 1;
-		gameLocal.Warning( "idTrigger_Multi '%s' at (%s) has random_delay >= delay", name.c_str(), GetPhysics()->GetOrigin().ToString(0) );
+		gameLocal.Warning( "idTrigger_Multi '%s' at (%s) has random_delay >= delay", name.c_str(), GetPhysics()->GetOrigin().ToString( 0 ) );
 	}
 
 	spawnArgs.GetString( "requires", "", requires );
@@ -374,16 +374,15 @@ bool idTrigger_Multi::CheckFacing( idEntity *activator ) {
 		if ( !activator->IsType( idPlayer::Type ) ) {
 			return true;
 		}
-		idPlayer *player = static_cast< idPlayer* >( activator );
+		idPlayer *player = static_cast<idPlayer*>( activator );
 		float dot = player->viewAngles.ToForward() * GetPhysics()->GetAxis()[0];
 		float angle = RAD2DEG( idMath::ACos( dot ) );
-		if ( angle  > spawnArgs.GetFloat( "angleLimit", "30" ) ) {
+		if ( angle > spawnArgs.GetFloat( "angleLimit", "30" ) ) {
 			return false;
 		}
 	}
 	return true;
 }
-
 
 /*
 ================
@@ -399,7 +398,10 @@ void idTrigger_Multi::TriggerAction( idEntity *activator ) {
 	} else {
 		// we can't just remove (this) here, because this is a touch function
 		// called while looping through area links...
-		nextTriggerTime = gameLocal.time + 1;
+
+		// If the player spawned inside the trigger, the player Spawn function called Think directly,
+		// allowing for multiple triggers on a trigger_once. Increasing the nextTriggerTime prevents it.
+		nextTriggerTime = gameLocal.time + 99999;
 		PostEventMS( &EV_Remove, 0 );
 	}
 }
@@ -424,6 +426,11 @@ so wait for the delay time before firing
 ================
 */
 void idTrigger_Multi::Event_Trigger( idEntity *activator ) {
+	if ( triggerFirst ) {
+		triggerFirst = false;
+		return;
+	}
+
 	if ( nextTriggerTime > gameLocal.time ) {
 		// can't retrigger until the wait is over
 		return;
@@ -435,11 +442,6 @@ void idTrigger_Multi::Event_Trigger( idEntity *activator ) {
 	}
 
 	if ( !CheckFacing( activator ) ) {
-		return;
-	}
-
-	if ( triggerFirst ) {
-		triggerFirst = false;
 		return;
 	}
 
@@ -461,7 +463,7 @@ idTrigger_Multi::Event_Touch
 ================
 */
 void idTrigger_Multi::Event_Touch( idEntity *other, trace_t *trace ) {
-	if( triggerFirst ) {
+	if ( triggerFirst ) {
 		return;
 	}
 
@@ -470,7 +472,7 @@ void idTrigger_Multi::Event_Touch( idEntity *other, trace_t *trace ) {
 		if ( !touchClient ) {
 			return;
 		}
-		if ( static_cast< idPlayer * >( other )->spectating ) {
+		if ( static_cast<idPlayer*>( other )->spectating ) {
 			return;
 		}
 	} else if ( !touchOther ) {
@@ -508,7 +510,7 @@ void idTrigger_Multi::Event_Touch( idEntity *other, trace_t *trace ) {
 /*
 ===============================================================================
 
-  idTrigger_EntityName
+	idTrigger_EntityName
 
 ===============================================================================
 */
@@ -531,6 +533,7 @@ idTrigger_EntityName::idTrigger_EntityName( void ) {
 	random_delay = 0.0f;
 	nextTriggerTime = 0;
 	triggerFirst = false;
+	testPartialName = false;
 }
 
 /*
@@ -546,6 +549,7 @@ void idTrigger_EntityName::Save( idSaveGame *savefile ) const {
 	savefile->WriteInt( nextTriggerTime );
 	savefile->WriteBool( triggerFirst );
 	savefile->WriteString( entityName );
+	savefile->WriteBool( testPartialName );
 }
 
 /*
@@ -561,6 +565,7 @@ void idTrigger_EntityName::Restore( idRestoreGame *savefile ) {
 	savefile->ReadInt( nextTriggerTime );
 	savefile->ReadBool( triggerFirst );
 	savefile->ReadString( entityName );
+	savefile->ReadBool( testPartialName );
 }
 
 /*
@@ -576,19 +581,19 @@ void idTrigger_EntityName::Spawn( void ) {
 
 	if ( random && ( random >= wait ) && ( wait >= 0 ) ) {
 		random = wait - 1;
-		gameLocal.Warning( "idTrigger_EntityName '%s' at (%s) has random >= wait", name.c_str(), GetPhysics()->GetOrigin().ToString(0) );
+		gameLocal.Warning( "idTrigger_EntityName '%s' at (%s) has random >= wait", name.c_str(), GetPhysics()->GetOrigin().ToString( 0 ) );
 	}
 
 	if ( random_delay && ( random_delay >= delay ) && ( delay >= 0 ) ) {
 		random_delay = delay - 1;
-		gameLocal.Warning( "idTrigger_EntityName '%s' at (%s) has random_delay >= delay", name.c_str(), GetPhysics()->GetOrigin().ToString(0) );
+		gameLocal.Warning( "idTrigger_EntityName '%s' at (%s) has random_delay >= delay", name.c_str(), GetPhysics()->GetOrigin().ToString( 0 ) );
 	}
 
 	spawnArgs.GetBool( "triggerFirst", "0", triggerFirst );
 
 	entityName = spawnArgs.GetString( "entityname" );
 	if ( !entityName.Length() ) {
-		gameLocal.Error( "idTrigger_EntityName '%s' at (%s) doesn't have 'entityname' key specified", name.c_str(), GetPhysics()->GetOrigin().ToString(0) );
+		gameLocal.Error( "idTrigger_EntityName '%s' at (%s) doesn't have 'entityname' key specified", name.c_str(), GetPhysics()->GetOrigin().ToString( 0 ) );
 	}
 
 	nextTriggerTime = 0;
@@ -596,6 +601,8 @@ void idTrigger_EntityName::Spawn( void ) {
 	if ( !spawnArgs.GetBool( "noTouch" ) ) {
 		GetPhysics()->SetContents( CONTENTS_TRIGGER );
 	}
+
+	testPartialName = spawnArgs.GetBool( "testPartialName", testPartialName );
 }
 
 /*
@@ -642,10 +649,22 @@ void idTrigger_EntityName::Event_Trigger( idEntity *activator ) {
 		return;
 	}
 
-	if ( !activator || ( activator->name != entityName ) ) {
-		return;
+	bool validEntity = false;
+	if ( activator ) {
+		if ( testPartialName ) {
+			if ( activator->name.Find( entityName, false ) >= 0 ) {
+				validEntity = true;
+			}
+		}
+		if ( activator->name == entityName ) {
+			validEntity = true;
+		}
 	}
 
+	if ( !validEntity ) {
+		return;
+	}
+ 
 	if ( triggerFirst ) {
 		triggerFirst = false;
 		return;
@@ -669,7 +688,7 @@ idTrigger_EntityName::Event_Touch
 ================
 */
 void idTrigger_EntityName::Event_Touch( idEntity *other, trace_t *trace ) {
-	if( triggerFirst ) {
+	if ( triggerFirst ) {
 		return;
 	}
 
@@ -678,7 +697,19 @@ void idTrigger_EntityName::Event_Touch( idEntity *other, trace_t *trace ) {
 		return;
 	}
 
-	if ( !other || ( other->name != entityName ) ) {
+	bool validEntity = false;
+	if ( other ) {
+		if ( testPartialName ) {
+			if ( other->name.Find( entityName, false ) >= 0 ) {
+				validEntity = true;
+			}
+		}
+		if ( other->name == entityName ) {
+			validEntity = true;
+		}
+	}
+
+	if ( !validEntity ) {
 		return;
 	}
 
@@ -695,7 +726,7 @@ void idTrigger_EntityName::Event_Touch( idEntity *other, trace_t *trace ) {
 /*
 ===============================================================================
 
-  idTrigger_Timer
+	idTrigger_Timer
 
 ===============================================================================
 */
@@ -765,7 +796,7 @@ void idTrigger_Timer::Spawn( void ) {
 
 	if ( random >= wait && wait >= 0 ) {
 		random = wait - 0.001;
-		gameLocal.Warning( "idTrigger_Timer '%s' at (%s) has random >= wait", name.c_str(), GetPhysics()->GetOrigin().ToString(0) );
+		gameLocal.Warning( "idTrigger_Timer '%s' at (%s) has random >= wait", name.c_str(), GetPhysics()->GetOrigin().ToString( 0 ) );
 	}
 
 	if ( on ) {
@@ -839,13 +870,13 @@ void idTrigger_Timer::Event_Use( idEntity *activator ) {
 /*
 ===============================================================================
 
-  idTrigger_Count
+	idTrigger_Count
 
 ===============================================================================
 */
 
 CLASS_DECLARATION( idTrigger, idTrigger_Count )
-	EVENT( EV_Activate,	idTrigger_Count::Event_Trigger )
+	EVENT( EV_Activate,			idTrigger_Count::Event_Trigger )
 	EVENT( EV_TriggerAction,	idTrigger_Count::Event_TriggerAction )
 END_CLASS
 
@@ -900,10 +931,10 @@ idTrigger_Count::Event_Trigger
 */
 void idTrigger_Count::Event_Trigger( idEntity *activator ) {
 	// goal of -1 means trigger has been exhausted
-	if (goal >= 0) {
+	if ( goal >= 0 ) {
 		count++;
 		if ( count >= goal ) {
-			if (spawnArgs.GetBool("repeat")) {
+			if ( spawnArgs.GetBool( "repeat" ) ) {
 				count = 0;
 			} else {
 				goal = -1;
@@ -929,7 +960,7 @@ void idTrigger_Count::Event_TriggerAction( idEntity *activator ) {
 /*
 ===============================================================================
 
-  idTrigger_Hurt
+	idTrigger_Hurt
 
 ===============================================================================
 */
@@ -976,9 +1007,6 @@ void idTrigger_Hurt::Restore( idRestoreGame *savefile ) {
 /*
 ================
 idTrigger_Hurt::Spawn
-
-	Damages activator
-	Can be turned on or off by using.
 ================
 */
 void idTrigger_Hurt::Spawn( void ) {
@@ -994,11 +1022,24 @@ idTrigger_Hurt::Event_Touch
 ================
 */
 void idTrigger_Hurt::Event_Touch( idEntity *other, trace_t *trace ) {
-	const char *damage;
+	const char *damage = NULL;
 
 	if ( on && other && gameLocal.time >= nextTime ) {
+		bool playerOnly = spawnArgs.GetBool( "playerOnly" );
+		if ( playerOnly ) {
+			if ( !other->IsType( idPlayer::Type ) ) {
+				return;
+			}
+		}
+
+		idVec3 dir = vec3_origin;
+		if ( spawnArgs.GetBool( "kick_from_center", "0" ) ) {
+			dir = other->GetPhysics()->GetOrigin() - GetPhysics()->GetOrigin();
+			dir.Normalize();
+		}
+
 		damage = spawnArgs.GetString( "def_damage", "damage_painTrigger" );
-		other->Damage( NULL, NULL, vec3_origin, damage, 1.0f, INVALID_JOINT );
+		other->Damage( NULL, NULL, dir, damage, 1.0f, INVALID_JOINT );
 
 		ActivateTargets( other );
 		CallScript();
@@ -1016,11 +1057,10 @@ void idTrigger_Hurt::Event_Toggle( idEntity *activator ) {
 	on = !on;
 }
 
-
 /*
 ===============================================================================
 
-  idTrigger_Fade
+	idTrigger_Fade
 
 ===============================================================================
 */
@@ -1051,7 +1091,7 @@ void idTrigger_Fade::Event_Trigger( idEntity *activator ) {
 /*
 ===============================================================================
 
-  idTrigger_Touch
+	idTrigger_Touch
 
 ===============================================================================
 */
@@ -1068,6 +1108,18 @@ idTrigger_Touch::idTrigger_Touch
 */
 idTrigger_Touch::idTrigger_Touch( void ) {
 	clipModel = NULL;
+}
+
+/*
+================
+idTrigger_Touch::idTrigger_Touch
+================
+*/
+idTrigger_Touch::~idTrigger_Touch( void ) {
+	if ( clipModel ) {
+		delete clipModel;
+		clipModel = 0;
+	}
 }
 
 /*
@@ -1189,4 +1241,118 @@ idTrigger_Touch::Disable
 */
 void idTrigger_Touch::Disable( void ) {
 	BecomeInactive( TH_THINK );
+}
+
+/*
+===============================================================================
+
+	idTrigger_Flag
+
+===============================================================================
+*/
+
+CLASS_DECLARATION( idTrigger_Multi, idTrigger_Flag )
+	EVENT( EV_Touch, idTrigger_Flag::Event_Touch )
+END_CLASS
+
+/*
+================
+idTrigger_Flag::idTrigger_Flag
+================
+*/
+idTrigger_Flag::idTrigger_Flag( void ) {
+	team		= -1;
+	player		= false;
+	eventFlag	= NULL;
+}
+
+/*
+================
+idTrigger_Flag::Spawn
+================
+*/
+void idTrigger_Flag::Spawn( void ) {
+	team = spawnArgs.GetInt( "team", "0" );
+	player = spawnArgs.GetBool( "player", "0" );
+
+	idStr funcname = spawnArgs.GetString( "eventflag", "" );
+	if ( funcname.Length() ) {
+		eventFlag = idEventDef::FindEvent( funcname );
+		if ( eventFlag == NULL ) {
+			gameLocal.Warning( "trigger '%s' at (%s) event unknown '%s'", name.c_str(), GetPhysics()->GetOrigin().ToString( 0 ), funcname.c_str() );
+		}
+	} else {
+		eventFlag = NULL;
+	}
+
+	idTrigger_Multi::Spawn();
+}
+
+/*
+================
+idTrigger_Flag::Event_Touch
+================
+*/
+void idTrigger_Flag::Event_Touch( idEntity *other, trace_t *trace ) {
+	idItemTeam *flag = NULL;
+
+	if ( player ) {
+		if ( !other->IsType( idPlayer::Type ) ) {
+			return;
+		}
+
+		idPlayer *player = static_cast<idPlayer*>( other );
+		if ( player->carryingFlag == false ) {
+			return;
+		}
+
+		if ( team != -1 && ( player->team != team || ( player->team != 0 && player->team != 1 ) ) ) {
+			return;
+		}
+
+		idItemTeam *flags[2];
+
+		flags[0] = gameLocal.mpGame.GetTeamFlag( 0 );
+		flags[1] = gameLocal.mpGame.GetTeamFlag( 1 );
+
+		int iFriend = 1 - player->team;			// index to the flag player team wants
+		int iOpp	= player->team;				// index to the flag opp team wants
+
+		// flag is captured if :
+		// 1)flag is truely bound to the player
+		// 2)opponent flag has been return
+		if ( flags[iFriend]->carried && !flags[iFriend]->dropped && !flags[iOpp]->carried && !flags[iOpp]->dropped ) {
+			flag = flags[iFriend];
+		} else {
+			return;
+		}
+	} else {
+		if ( !other->IsType( idItemTeam::Type ) ) {
+			return;
+		}
+
+		idItemTeam *item = static_cast<idItemTeam*>( other );
+		if ( item->team == team || team == -1 ) {
+			flag = item;
+		} else {
+ 			return;
+		}
+	}
+
+	if ( flag ) {
+		switch ( eventFlag->GetNumArgs() ) {
+			default :
+			case 0 :
+				flag->PostEventMS( eventFlag, 0 );
+			break;
+			case 1 :
+				flag->PostEventMS( eventFlag, 0, 0 );
+			break;
+			case 2 :
+				flag->PostEventMS( eventFlag, 0, 0, 0 );
+			break;
+		}
+
+		idTrigger_Multi::Event_Touch( other, trace );
+	}
 }

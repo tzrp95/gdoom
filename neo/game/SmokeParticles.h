@@ -58,19 +58,19 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 typedef struct singleSmoke_s {
-	struct singleSmoke_s	 *	next;
+	struct singleSmoke_s		*next;
 	int							privateStartTime;	// start time for this particular particle
 	int							index;				// particle index in system, 0 <= index < stage->totalParticles
 	idRandom					random;
 	idVec3						origin;
 	idMat3						axis;
+	int							timeGroup;
 } singleSmoke_t;
 
 typedef struct {
-	const idParticleStage *		stage;
-	singleSmoke_t *				smokes;
+	const idParticleStage		*stage;
+	singleSmoke_t				*smokes;
 } activeSmokeStage_t;
-
 
 class idSmokeParticles {
 public:
@@ -81,8 +81,7 @@ public:
 	void						Shutdown( void );
 
 	// spits out a particle, returning false if the system will not emit any more particles in the future
-	bool						EmitSmoke( const idDeclParticle *smoke, const int startTime, const float diversity,
-											const idVec3 &origin, const idMat3 &axis );
+	bool						EmitSmoke( const idDeclParticle *smoke, const int startTime, const float diversity, const idVec3 &origin, const idMat3 &axis, int timeGroup );
 
 	// free old smokes
 	void						FreeSmokes( void );
@@ -97,7 +96,7 @@ private:
 	singleSmoke_t				smokes[MAX_SMOKE_PARTICLES];
 
 	idList<activeSmokeStage_t>	activeStages;
-	singleSmoke_t *				freeSmokes;
+	singleSmoke_t				*freeSmokes;
 	int							numActiveSmokes;
 	int							currentParticleTime;	// don't need to recalculate if == view time
 

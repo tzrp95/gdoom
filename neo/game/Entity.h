@@ -69,6 +69,10 @@ extern const idEventDef EV_StartSoundShader;
 extern const idEventDef EV_StopSound;
 extern const idEventDef EV_CacheSoundShader;
 
+extern const idEventDef EV_FadeSound;
+extern const idEventDef EV_GetMass;
+extern const idEventDef EV_IsInLiquid;
+
 // Think flags
 enum {
 	TH_ALL					= -1,
@@ -76,7 +80,8 @@ enum {
 	TH_PHYSICS				= 2,		// run physics each frame
 	TH_ANIMATE				= 4,		// update animation each frame
 	TH_UPDATEVISUALS		= 8,		// update renderEntity
-	TH_UPDATEPARTICLES		= 16
+	TH_UPDATEPARTICLES		= 16,		// used by various classes derived from entity in various situations
+	TH_UPDATEWOUNDPARTICLES = 32		// updates wound particles ( DentonMod )
 };
 
 //
@@ -113,6 +118,17 @@ public:
 	idList<signal_t> signal[ NUM_SIGNALS ];
 };
 
+//--------------------------------------------------------------------------------------
+// entDamageEffect holds information about wound effects being played on the entities
+//																		- DentonMod
+//--------------------------------------------------------------------------------------
+typedef struct entDamageEffect_s {
+	idVec3						origin;
+	idVec3						dir;
+	int							time;
+	const idDeclParticle		*type;
+	struct entDamageEffect_s	*next;
+} entDamageEffect_t;
 
 class idEntity : public idClass {
 public:
@@ -136,10 +152,14 @@ public:
 	int						dormantStart;			// time that the entity was first closed off from player
 	bool					cinematic;				// during cinematics, entity will only think if cinematic is set
 
-	renderView_t *			renderView;				// for camera views from this entity
-	idEntity *				cameraTarget;			// any remoteRenderMap shaders will use this
+	renderView_t			*renderView;			// for camera views from this entity
+	idEntity				*cameraTarget;			// any remoteRenderMap shaders will use this
 
-	idList< idEntityPtr<idEntity> >	targets;		// when this entity is activated these entities entity are activated
+	// Camera field of view for remote renders
+	int						cameraFovX;
+	int						cameraFovY;
+
+	idList<idEntityPtr<idEntity>>	targets;		// when this entity is activated these entities entity are activated
 
 	int						health;					// FIXME: do all objects really need health?
 
@@ -156,7 +176,21 @@ public:
 		bool				isDormant			:1;	// if true the entity is dormant
 		bool				hasAwakened			:1;	// before a monster has been awakened the first time, use full PVS for dormant instead of area-connected
 		bool				networkSync			:1; // if true the entity is synchronized over the network
+		bool				grabbed				:1;	// if true object is currently being grabbed
+		
+		bool				invisible			:1; // if true this entity is currently invisible and cannot be seen by other entities
 	} fl;
+
+	int						timeGroup;
+	bool					noGrab;
+
+	renderEntity_t			xrayEntity;
+	qhandle_t				xrayEntityHandle;
+	const idDeclSkin		*xraySkin;
+
+	void					DetermineTimeGroup( bool slowmo );
+	void					SetGrabbedState( bool grabbed );
+	bool					IsGrabbed();
 
 public:
 	ABSTRACT_PROTOTYPE( idEntity );
@@ -169,10 +203,11 @@ public:
 	void					Save( idSaveGame *savefile ) const;
 	void					Restore( idRestoreGame *savefile );
 
-	const char *			GetEntityDefName( void ) const;
+	const char				*GetEntityDefName( void ) const;
 	void					SetName( const char *name );
-	const char *			GetName( void ) const;
+	const char				*GetName( void ) const;
 	virtual void			UpdateChangeableSpawnArgs( const idDict *source );
+	int						GetEntityNumber() const { return entityNumber; }
 
 							// clients generate views based on all the player specific options,
 							// cameras have custom code, and everything else just uses the axis orientation
@@ -187,14 +222,15 @@ public:
 	void					BecomeActive( int flags );
 	void					BecomeInactive( int flags );
 	void					UpdatePVSAreas( const idVec3 &pos );
+	void					UpdateParticles	( void );	// DentonMod
 
 	// visuals
 	virtual void			Present( void );
-	virtual renderEntity_t *GetRenderEntity( void );
+	virtual renderEntity_t	*GetRenderEntity( void );
 	virtual int				GetModelDefHandle( void );
 	virtual void			SetModel( const char *modelname );
 	void					SetSkin( const idDeclSkin *skin );
-	const idDeclSkin *		GetSkin( void ) const;
+	const idDeclSkin		*GetSkin( void ) const;
 	void					SetShaderParm( int parmnum, float value );
 	virtual void			SetColor( float red, float green, float blue );
 	virtual void			SetColor( const idVec3 &color );
@@ -211,7 +247,7 @@ public:
 	void					UpdateModelTransform( void );
 	virtual void			ProjectOverlay( const idVec3 &origin, const idVec3 &dir, float size, const char *material );
 	int						GetNumPVSAreas( void );
-	const int *				GetPVSAreas( void );
+	const int				*GetPVSAreas( void );
 	void					ClearPVSAreas( void );
 	bool					PhysicsTeamInPVS( pvsHandle_t pvsHandle );
 
@@ -219,17 +255,18 @@ public:
 	virtual bool			UpdateAnimationControllers( void );
 	bool					UpdateRenderEntity( renderEntity_s *renderEntity, const renderView_t *renderView );
 	static bool				ModelCallback( renderEntity_s *renderEntity, const renderView_t *renderView );
-	virtual idAnimator *	GetAnimator( void );	// returns animator object used by this entity
+	virtual idAnimator		*GetAnimator( void );	// returns animator object used by this entity
 
 	// sound
 	virtual bool			CanPlayChatterSounds( void ) const;
 	bool					StartSound( const char *soundName, const s_channelType channel, int soundShaderFlags, bool broadcast, int *length );
 	bool					StartSoundShader( const idSoundShader *shader, const s_channelType channel, int soundShaderFlags, bool broadcast, int *length );
+	void					FadeSound( int channel, float to, float over );
 	void					StopSound( const s_channelType channel, bool broadcast );	// pass SND_CHANNEL_ANY to stop all sounds
 	void					SetSoundVolume( float volume );
 	void					UpdateSound( void );
 	int						GetListenerId( void ) const;
-	idSoundEmitter *		GetSoundEmitter( void ) const;
+	idSoundEmitter			*GetSoundEmitter( void ) const;
 	void					FreeSoundEmitter( bool immediate );
 
 	// entity binding
@@ -245,11 +282,11 @@ public:
 	void					Unbind( void );
 	bool					IsBound( void ) const;
 	bool					IsBoundTo( idEntity *master ) const;
-	idEntity *				GetBindMaster( void ) const;
+	idEntity				*GetBindMaster( void ) const;
 	jointHandle_t			GetBindJoint( void ) const;
 	int						GetBindBody( void ) const;
-	idEntity *				GetTeamMaster( void ) const;
-	idEntity *				GetNextTeamEntity( void ) const;
+	idEntity				*GetTeamMaster( void ) const;
+	idEntity				*GetNextTeamEntity( void ) const;
 	void					ConvertLocalToWorldTransform( idVec3 &offset, idMat3 &axis );
 	idVec3					GetLocalVector( const idVec3 &vec ) const;
 	idVec3					GetLocalCoordinates( const idVec3 &vec ) const;
@@ -262,7 +299,7 @@ public:
 							// set a new physics object to be used by this entity
 	void					SetPhysics( idPhysics *phys );
 							// get the physics object used by this entity
-	idPhysics *				GetPhysics( void ) const;
+	idPhysics				*GetPhysics( void ) const;
 							// restore physics pointer for save games
 	void					RestorePhysics( idPhysics *phys );
 							// run the physics for this entity
@@ -303,8 +340,11 @@ public:
 	virtual bool			CanDamage( const idVec3 &origin, idVec3 &damagePoint ) const;
 							// applies damage to this entity
 	virtual	void			Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &dir, const char *damageDefName, const float damageScale, const int location );
+
 							// adds a damage effect like overlays, blood, sparks, debris etc.
-	virtual void			AddDamageEffect( const trace_t &collision, const idVec3 &velocity, const char *damageDefName );
+	// added *soundEnt flag from DentonMod
+	virtual void			AddDamageEffect( const trace_t &collision, const idVec3 &velocity, const char *damageDefName, idEntity *soundEnt = NULL );
+
 							// callback function for when another entity received damage from this entity.  damage can be adjusted and returned to the caller.
 	virtual void			DamageFeedback( idEntity *victim, idEntity *inflictor, int &damage );
 							// notifies this entity that it is in pain
@@ -314,7 +354,7 @@ public:
 
 	// scripting
 	virtual bool			ShouldConstructScriptObjectAtSpawn( void ) const;
-	virtual idThread *		ConstructScriptObject( void );
+	virtual idThread		*ConstructScriptObject( void );
 	virtual void			DeconstructScriptObject( void );
 	void					SetSignal( signalNum_t signalnum, idThread *thread, const function_t *function );
 	void					ClearSignal( idThread *thread, signalNum_t signalnum );
@@ -336,7 +376,7 @@ public:
 	// misc
 	virtual void			Teleport( const idVec3 &origin, const idAngles &angles, idEntity *destination );
 	bool					TouchTriggers( void ) const;
-	idCurve_Spline<idVec3> *GetSpline( void ) const;
+	idCurve_Spline<idVec3>	*GetSpline( void ) const;
 	virtual void			ShowEditingDialog( void );
 
 	enum {
@@ -365,20 +405,21 @@ protected:
 	renderEntity_t			renderEntity;						// used to present a model to the renderer
 	int						modelDefHandle;						// handle to static renderer model
 	refSound_t				refSound;							// used to present sound to the audio engine
+	entDamageEffect_t *		entDamageEffects;					// DentonMod : we are going to add damage effect to every entity.
 
 private:
 	idPhysics_Static		defaultPhysicsObj;					// default physics object
-	idPhysics *				physics;							// physics used for this entity
-	idEntity *				bindMaster;							// entity bound to if unequal NULL
+	idPhysics				*physics;							// physics used for this entity
+	idEntity				*bindMaster;						// entity bound to if unequal NULL
 	jointHandle_t			bindJoint;							// joint bound to if unequal INVALID_JOINT
 	int						bindBody;							// body bound to if unequal -1
-	idEntity *				teamMaster;							// master of the physics team
-	idEntity *				teamChain;							// next entity in physics team
+	idEntity				*teamMaster;						// master of the physics team
+	idEntity				*teamChain;							// next entity in physics team
 
 	int						numPVSAreas;						// number of renderer areas the entity covers
 	int						PVSAreas[MAX_PVS_AREAS];			// numbers of the renderer areas the entity covers
 
-	signalList_t *			signals;
+	signalList_t			*signals;
 
 	int						mpGUIState;							// local cache to avoid systematic SetStateInt
 
@@ -432,7 +473,7 @@ private:
 	void					Event_StartSound( const char *soundName, int channel, int netSync );
 	void					Event_FadeSound( int channel, float to, float over );
 	void					Event_GetWorldOrigin( void );
-	void					Event_SetWorldOrigin( idVec3 const &org );
+	void					Event_SetWorldOrigin( const idVec3 &org );
 	void					Event_GetOrigin( void );
 	void					Event_SetOrigin( const idVec3 &org );
 	void					Event_GetAngles( void );
@@ -445,16 +486,18 @@ private:
 	void					Event_GetSize( void );
 	void					Event_GetMins( void );
 	void					Event_GetMaxs( void );
+	void					Event_GetCenter( void );
 	void					Event_Touches( idEntity *ent );
 	void					Event_SetGuiParm( const char *key, const char *val );
 	void					Event_SetGuiFloat( const char *key, float f );
 	void					Event_GetNextKey( const char *prefix, const char *lastMatch );
 	void					Event_SetKey( const char *key, const char *value );
-	void					Event_GetKey( const char *key );
-	void					Event_GetIntKey( const char *key );
-	void					Event_GetFloatKey( const char *key );
-	void					Event_GetVectorKey( const char *key );
-	void					Event_GetEntityKey( const char *key );
+	void					Event_GetKey( const char *key ) const;
+	void					Event_GetIntKey( const char *key ) const;
+	void					Event_GetBoolKey( const char *key ) const;
+	void					Event_GetFloatKey( const char *key ) const;
+	void					Event_GetVectorKey( const char *key ) const;
+	void					Event_GetEntityKey( const char *key ) const;
 	void					Event_RestorePosition( void );
 	void					Event_UpdateCameraTarget( void );
 	void					Event_DistanceTo( idEntity *ent );
@@ -465,6 +508,14 @@ private:
 	void					Event_HasFunction( const char *name );
 	void					Event_CallFunction( const char *name );
 	void					Event_SetNeverDormant( int enable );
+	void					Event_SetGui( int guiNum, const char *guiName );
+	void					Event_PrecacheGui( const char *guiName );
+	void					Event_GetGuiParm( int guiNum, const char *key );
+	void					Event_GetGuiParmFloat( int guiNum, const char *key );
+	void					Event_GuiNamedEvent( int guiNum, const char *event );
+
+	void					Event_GetMass( int body );
+	void					Event_IsInLiquid( void );
 };
 
 /*
@@ -475,13 +526,16 @@ private:
 ===============================================================================
 */
 
+extern const idEventDef EV_TriggerFX;
+extern const idEventDef EV_SetAnimRate;
+
 typedef struct damageEffect_s {
 	jointHandle_t			jointNum;
 	idVec3					localOrigin;
 	idVec3					localNormal;
 	int						time;
-	const idDeclParticle*	type;
-	struct damageEffect_s *	next;
+	const idDeclParticle	*type;
+	struct damageEffect_s	*next;
 } damageEffect_t;
 
 class idAnimatedEntity : public idEntity {
@@ -499,15 +553,19 @@ public:
 
 	void					UpdateAnimation( void );
 
-	virtual idAnimator *	GetAnimator( void );
+	virtual idAnimator		*GetAnimator( void );
 	virtual void			SetModel( const char *modelname );
 
 	bool					GetJointWorldTransform( jointHandle_t jointHandle, int currentTime, idVec3 &offset, idMat3 &axis );
 	bool					GetJointTransformForAnim( jointHandle_t jointHandle, int animNum, int currentTime, idVec3 &offset, idMat3 &axis ) const;
 
 	virtual int				GetDefaultSurfaceType( void ) const;
-	virtual void			AddDamageEffect( const trace_t &collision, const idVec3 &velocity, const char *damageDefName );
-	void					AddLocalDamageEffect( jointHandle_t jointNum, const idVec3 &localPoint, const idVec3 &localNormal, const idVec3 &localDir, const idDeclEntityDef *def, const idMaterial *collisionMaterial );
+
+	// added soundEnt flag from DentonMod --->
+	virtual void			AddDamageEffect( const trace_t &collision, const idVec3 &velocity, const char *damageDefName, idEntity *soundEnt );
+	void					AddLocalDamageEffect( jointHandle_t jointNum, const idVec3 &localPoint, const idVec3 &localNormal, const idVec3 &localDir, const idDeclEntityDef *def, const idMaterial *collisionMaterial, idEntity *soundEnt = NULL );
+	// <---
+
 	void					UpdateDamageEffects( void );
 
 	virtual bool			ClientReceiveEvent( int event, int time, const idBitMsg &msg );
@@ -519,9 +577,13 @@ public:
 
 protected:
 	idAnimator				animator;
-	damageEffect_t *		damageEffects;
+	damageEffect_t			*damageEffects;
+
+	void					TriggerFX( const char *joint, const char *fx );
 
 private:
+	int						nextBloodPoolTime;	// DentonMod
+
 	void					Event_GetJointHandle( const char *jointname );
 	void					Event_ClearAllJoints( void );
 	void					Event_ClearJoint( jointHandle_t jointnum );
@@ -529,6 +591,73 @@ private:
 	void					Event_SetJointAngle( jointHandle_t jointnum, jointModTransform_t transform_type, const idAngles &angles );
 	void					Event_GetJointPos( jointHandle_t jointnum );
 	void					Event_GetJointAngle( jointHandle_t jointnum );
+
+	void					Event_TriggerFX( const char *joint, const char *fx );
+	void					Event_SetAnimRate( float multiplier );
 };
+
+class SetTimeState {
+	bool					activated;
+	bool					previousFast;
+	bool					fast;
+
+public:
+							SetTimeState();
+							SetTimeState( int timeGroup );
+							~SetTimeState();
+
+	void					PushState( int timeGroup );
+};
+
+ID_INLINE SetTimeState::SetTimeState() {
+	activated = false;
+	previousFast = false;
+}
+
+ID_INLINE SetTimeState::SetTimeState( int timeGroup ) {
+	activated = false;
+	previousFast = false;
+	PushState( timeGroup );
+}
+
+ID_INLINE void SetTimeState::PushState( int timeGroup ) {
+	// Don't mess with time in Multiplayer
+	if ( !gameLocal.isMultiplayer ) {
+
+		activated = true;
+
+		// determine previous fast setting
+		if ( gameLocal.time == gameLocal.slow.time ) {
+			previousFast = false;
+		} else {
+			previousFast = true;
+		}
+
+		// determine new fast setting
+		if ( timeGroup ) {
+			fast = true;
+		} else {
+			fast = false;
+		}
+
+		// set correct time
+		if ( fast ) {
+			gameLocal.fast.Get( gameLocal.time, gameLocal.previousTime, gameLocal.msec, gameLocal.framenum, gameLocal.realClientTime );
+		} else {
+			gameLocal.slow.Get( gameLocal.time, gameLocal.previousTime, gameLocal.msec, gameLocal.framenum, gameLocal.realClientTime );
+		}
+	}
+}
+
+ID_INLINE SetTimeState::~SetTimeState() {
+	if ( activated && !gameLocal.isMultiplayer ) {
+		// set previous correct time
+		if ( previousFast ) {
+			gameLocal.fast.Get( gameLocal.time, gameLocal.previousTime, gameLocal.msec, gameLocal.framenum, gameLocal.realClientTime );
+		} else {
+			gameLocal.slow.Get( gameLocal.time, gameLocal.previousTime, gameLocal.msec, gameLocal.framenum, gameLocal.realClientTime );
+		}
+	}
+}
 
 #endif /* !__GAME_ENTITY_H__ */

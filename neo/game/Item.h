@@ -35,10 +35,14 @@ If you have questions concerning this license or the applicable additional terms
 /*
 ===============================================================================
 
-  Items the player can pick up or use.
+	Items the player can pick up or use.
 
 ===============================================================================
 */
+
+// =====================================================
+//	idItem
+// =====================================================
 
 class idItem : public idEntity {
 public:
@@ -51,7 +55,7 @@ public:
 	void					Restore( idRestoreGame *savefile );
 
 	void					Spawn( void );
-	void					GetAttributes( idDict &attributes );
+	void					GetAttributes( idDict &attributes ) const;
 	virtual bool			GiveToPlayer( idPlayer *player );
 	virtual bool			Pickup( idPlayer *player );
 	virtual void			Think( void );
@@ -61,6 +65,10 @@ public:
 		EVENT_PICKUP = idEntity::EVENT_MAXEVENTS,
 		EVENT_RESPAWN,
 		EVENT_RESPAWNFX,
+		EVENT_TAKEFLAG,
+		EVENT_DROPFLAG,
+		EVENT_FLAGRETURN,
+		EVENT_FLAGCAPTURE,
 		EVENT_MAXEVENTS
 	};
 
@@ -79,7 +87,7 @@ private:
 
 	// for item pulse effect
 	int						itemShellHandle;
-	const idMaterial *		shellMaterial;
+	const idMaterial		*shellMaterial;
 
 	// used to update the item pulse effect
 	mutable bool			inView;
@@ -97,6 +105,10 @@ private:
 	void					Event_RespawnFx( void );
 };
 
+// =====================================================
+//	idItemPowerup
+// =====================================================
+
 class idItemPowerup : public idItem {
 public:
 	CLASS_PROTOTYPE( idItemPowerup );
@@ -113,6 +125,10 @@ private:
 	int						time;
 	int						type;
 };
+
+// =====================================================
+//	idObjective
+// =====================================================
 
 class idObjective : public idItem {
 public:
@@ -134,6 +150,10 @@ private:
 	void					Event_CamShot();
 };
 
+// =====================================================
+//	idVideoCDItem
+// =====================================================
+
 class idVideoCDItem : public idItem {
 public:
 	CLASS_PROTOTYPE( idVideoCDItem );
@@ -142,12 +162,20 @@ public:
 	virtual bool			GiveToPlayer( idPlayer *player );
 };
 
+// =====================================================
+//	idPDAItem
+// =====================================================
+
 class idPDAItem : public idItem {
 public:
 	CLASS_PROTOTYPE( idPDAItem );
 
 	virtual bool			GiveToPlayer( idPlayer *player );
 };
+
+// =====================================================
+//	idMoveableItem
+// =====================================================
 
 class idMoveableItem : public idItem {
 public:
@@ -161,25 +189,97 @@ public:
 
 	void					Spawn( void );
 	virtual void			Think( void );
+	virtual bool			Collide( const trace_t &collision, const idVec3 &velocity );
 	virtual bool			Pickup( idPlayer *player );
 
-	static void				DropItems( idAnimatedEntity *ent, const char *type, idList<idEntity *> *list );
-	static idEntity	*		DropItem( const char *classname, const idVec3 &origin, const idMat3 &axis, const idVec3 &velocity, int activateDelay, int removeDelay );
+	static void				DropItems( idAnimatedEntity *ent, const char *type, idList<idEntity*> *list );
+	static idEntity *		DropItem( const char *classname, const idVec3 &origin, const idMat3 &axis, const idVec3 &velocity, int activateDelay, int removeDelay );
 
 	virtual void			WriteToSnapshot( idBitMsgDelta &msg ) const;
 	virtual void			ReadFromSnapshot( const idBitMsgDelta &msg );
 
-private:
+protected:
 	idPhysics_RigidBody		physicsObj;
 	idClipModel *			trigger;
-	const idDeclParticle *	smoke;
+	const idDeclParticle	*smoke;
 	int						smokeTime;
+	int						nextSoundTime;
+	bool					repeatSmoke;	// never stop updating the particles
 
 	void					Gib( const idVec3 &dir, const char *damageDefName );
 
 	void					Event_DropToFloor( void );
 	void					Event_Gib( const char *damageDefName );
 };
+
+// =====================================================
+//	idItemTeam
+// =====================================================
+
+class idItemTeam : public idMoveableItem {
+public:
+	CLASS_PROTOTYPE( idItemTeam );
+
+							idItemTeam();
+	virtual					~idItemTeam();
+
+	void                    Spawn();
+	virtual bool			Pickup( idPlayer *player );
+	virtual bool			ClientReceiveEvent( int event, int time, const idBitMsg &msg );
+	virtual void			Think(void );
+
+	void					Drop( bool death = false );	// was the drop caused by death of carrier?
+	void					Return( idPlayer *player = NULL );
+	void					Capture( void );
+
+	virtual void			FreeLightDef( void );
+	virtual void			Present( void );
+
+	// networking
+	virtual void			WriteToSnapshot( idBitMsgDelta &msg ) const;
+	virtual void			ReadFromSnapshot( const idBitMsgDelta &msg );
+
+public:
+	int                     team;
+	// TODO : turn this into a state :
+	bool					carried;			// is it beeing carried by a player?
+	bool					dropped;			// was it dropped?
+
+private:
+	idVec3					returnOrigin;
+	idMat3					returnAxis;
+	int						lastDrop;
+
+	const idDeclSkin		*skinDefault;
+	const idDeclSkin		*skinCarried;
+
+	const function_t		*scriptTaken;
+	const function_t		*scriptDropped;
+	const function_t		*scriptReturned;
+	const function_t		*scriptCaptured;
+
+	renderLight_t           itemGlow;           // Used by flags when they are picked up
+	int                     itemGlowHandle;
+
+	int						lastNuggetDrop;
+	const char				*nuggetName;
+
+private:
+	void					Event_TakeFlag( idPlayer *player );
+	void					Event_DropFlag( bool death );
+	void					Event_FlagReturn( idPlayer *player = NULL );
+	void					Event_FlagCapture( void );
+
+	void					PrivateReturn( void );
+	function_t				*LoadScript( const char *script );
+
+	void					SpawnNugget( idVec3 pos );
+	void                    UpdateGuis( void );
+};
+
+// =====================================================
+//	idMoveablePDAItem
+// =====================================================
 
 class idMoveablePDAItem : public idMoveableItem {
 public:
@@ -188,13 +288,50 @@ public:
 	virtual bool			GiveToPlayer( idPlayer *player );
 };
 
+// =====================================================
+//	idMoveableVideoCDItem
+// =====================================================
+
+class idMoveableVideoCDItem : public idMoveableItem {
+public:
+	CLASS_PROTOTYPE( idMoveableVideoCDItem );
+
+	void					Spawn();
+	virtual bool			GiveToPlayer( idPlayer *player );
+};
+
+// =====================================================
+//	idMoveableItemPowerup
+// =====================================================
+
+class idMoveableItemPowerup : public idMoveableItem {
+public:
+	CLASS_PROTOTYPE( idMoveableItemPowerup );
+
+							idMoveableItemPowerup();
+
+	void					Save( idSaveGame *savefile ) const;
+	void					Restore( idRestoreGame *savefile );
+
+	void					Spawn();
+	virtual bool			GiveToPlayer( idPlayer *player );
+
+private:
+	int						time;
+	int						type;
+};
+
 /*
 ===============================================================================
 
-  Item removers.
+	Item removers.
 
 ===============================================================================
 */
+
+// =====================================================
+//	idItemRemover
+// =====================================================
 
 class idItemRemover : public idEntity {
 public:
@@ -206,6 +343,10 @@ public:
 private:
 	void					Event_Trigger( idEntity *activator );
 };
+
+// =====================================================
+//	idObjectiveComplete
+// =====================================================
 
 class idObjectiveComplete : public idItemRemover {
 public:

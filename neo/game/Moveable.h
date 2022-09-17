@@ -39,7 +39,7 @@ If you have questions concerning this license or the applicable additional terms
 /*
 ===============================================================================
 
-  Entity using rigid body physics.
+	Entity using rigid body physics.
 
 ===============================================================================
 */
@@ -71,15 +71,19 @@ public:
 	virtual void			WriteToSnapshot( idBitMsgDelta &msg ) const;
 	virtual void			ReadFromSnapshot( const idBitMsgDelta &msg );
 
+	void					SetAttacker( idEntity *ent );
+
 protected:
 	idPhysics_RigidBody		physicsObj;				// physics object
 	idStr					brokenModel;			// model set when health drops down to or below zero
 	idStr					damage;					// if > 0 apply damage to hit entities
+	idStr					monsterDamage;
+	idEntity				*attacker;
 	idStr					fxCollide;				// fx system to start when collides with something
 	int						nextCollideFxTime;		// next time it is ok to spawn collision fx
 	float					minDamageVelocity;		// minimum velocity before moveable applies damage
 	float					maxDamageVelocity;		// velocity at which the maximum damage is applied
-	idCurve_Spline<idVec3> *initialSpline;			// initial spline path the moveable follows
+	idCurve_Spline<idVec3>	*initialSpline;			// initial spline path the moveable follows
 	idVec3					initialSplineDir;		// initial relative direction along the spline path
 	bool					explode;				// entity explodes when health drops down to or below zero
 	bool					unbindOnDeath;			// unbind from master when health drops down to or below zero
@@ -88,7 +92,7 @@ protected:
 	int						nextDamageTime;			// next time the movable can hurt the player
 	int						nextSoundTime;			// next time the moveable can make a sound
 
-	const idMaterial *		GetRenderModelMaterial( void ) const;
+	const idMaterial		*GetRenderModelMaterial( void ) const;
 	void					BecomeNonSolid( void );
 	void					InitInitialSpline( int startTime );
 	bool					FollowInitialSplinePath( void );
@@ -100,12 +104,12 @@ protected:
 	void					Event_EnableDamage( float enable );
 };
 
-
 /*
 ===============================================================================
 
-  A barrel using rigid body physics. The barrel has special handling of
-  the view model orientation to make it look like it rolls instead of slides.
+	A barrel using rigid body physics. The barrel has special 
+	handling of the view model orientation to make it look like 
+	it rolls instead of slides.
 
 ===============================================================================
 */
@@ -135,13 +139,12 @@ private:
 	idMat3					additionalAxis;			// additional rotation axis
 };
 
-
 /*
 ===============================================================================
-
-  A barrel using rigid body physics and special handling of the view model
-  orientation to make it look like it rolls instead of slides. The barrel
-  can burn and explode when damaged.
+	
+	A barrel using rigid body physics and special handling of the view model
+	orientation to make it look like it rolls instead of slides. The barrel
+	can burn and explode when damaged.
 
 ===============================================================================
 */
@@ -157,6 +160,11 @@ public:
 
 	void					Save( idSaveGame *savefile ) const;
 	void					Restore( idRestoreGame *savefile );
+
+	bool					IsStable( void );
+	void					SetStability( bool stability );
+	void					StartBurning( void );
+	void					StopBurning( void );
 
 	virtual void			Think( void );
 	virtual void			Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &dir,
@@ -190,6 +198,7 @@ private:
 	int						particleTime;
 	int						lightTime;
 	float					time;
+	bool					isStable;
 
 	void					AddParticles( const char *name, bool burn );
 	void					AddLight( const char *name , bool burn );

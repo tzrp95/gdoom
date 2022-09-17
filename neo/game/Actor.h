@@ -56,6 +56,9 @@ extern const idEventDef AI_PlayCycle;
 extern const idEventDef AI_AnimDone;
 extern const idEventDef AI_SetBlendFrames;
 extern const idEventDef AI_GetBlendFrames;
+extern const idEventDef AI_SetState;
+extern const idEventDef EV_FootstepFX;
+extern const idEventDef AI_TouchingSurfType;
 
 class idDeclParticle;
 
@@ -89,9 +92,9 @@ public:
 	animFlags_t				GetAnimFlags( void ) const;
 
 private:
-	idActor *				self;
-	idAnimator *			animator;
-	idThread *				thread;
+	idActor					*self;
+	idAnimator				*animator;
+	idThread				*thread;
 	int						channel;
 	bool					disabled;
 };
@@ -145,13 +148,13 @@ public:
 							// script state management
 	void					ShutdownThreads( void );
 	virtual bool			ShouldConstructScriptObjectAtSpawn( void ) const;
-	virtual idThread *		ConstructScriptObject( void );
+	virtual idThread		*ConstructScriptObject( void );
 	void					UpdateScript( void );
 	const function_t		*GetScriptFunction( const char *funcname );
 	void					SetState( const function_t *newState );
 	void					SetState( const char *statename );
 
-							// vision testing
+							// vision
 	void					SetEyeHeight( float height );
 	float					EyeHeight( void ) const;
 	idVec3					EyeOffset( void ) const;
@@ -167,13 +170,14 @@ public:
 	void					SetupDamageGroups( void );
 	virtual	void			Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &dir, const char *damageDefName, const float damageScale, const int location );
 	int						GetDamageForLocation( int damage, int location );
-	const char *			GetDamageGroup( int location );
+	const char				*GetDamageGroup( int location );
 	void					ClearPain( void );
 	virtual bool			Pain( idEntity *inflictor, idEntity *attacker, int damage, const idVec3 &dir, int location );
+	virtual void			SpawnGibs( const idVec3 &dir, const char *damageDefName );
 
-							// model/combat model/ragdoll
+							// model / combat model / ragdoll
 	void					SetCombatModel( void );
-	idClipModel *			GetCombatModel( void ) const;
+	idClipModel				*GetCombatModel( void ) const;
 	virtual void			LinkCombat( void );
 	virtual void			UnlinkCombat( void );
 	bool					StartRagdoll( void );
@@ -181,49 +185,45 @@ public:
 	virtual bool			UpdateAnimationControllers( void );
 
 							// delta view angles to allow movers to rotate the view of the actor
-	const idAngles &		GetDeltaViewAngles( void ) const;
+	const idAngles			&GetDeltaViewAngles( void ) const;
 	void					SetDeltaViewAngles( const idAngles &delta );
 
 	bool					HasEnemies( void ) const;
-	idActor *				ClosestEnemyToPoint( const idVec3 &pos );
-	idActor *				EnemyWithMostHealth();
+	idActor					*ClosestEnemyToPoint( const idVec3 &pos );
+	idActor					*EnemyWithMostHealth();
 
 	virtual bool			OnLadder( void ) const;
-
 	virtual void			GetAASLocation( idAAS *aas, idVec3 &pos, int &areaNum ) const;
-
 	void					Attach( idEntity *ent );
-
 	virtual void			Teleport( const idVec3 &origin, const idAngles &angles, idEntity *destination );
-
-	virtual	renderView_t *	GetRenderView();
+	virtual	renderView_t	*GetRenderView();
 
 							// animation state control
 	int						GetAnim( int channel, const char *name );
 	void					UpdateAnimState( void );
 	void					SetAnimState( int channel, const char *name, int blendFrames );
-	const char *			GetAnimState( int channel ) const;
+	const char				*GetAnimState( int channel ) const;
 	bool					InAnimState( int channel, const char *name ) const;
-	const char *			WaitState( void ) const;
+	const char				*WaitState( void ) const;
 	void					SetWaitState( const char *_waitstate );
-	bool					AnimDone( int channel, int blendFrames ) const;
-	virtual void			SpawnGibs( const idVec3 &dir, const char *damageDefName );
+
+	idEntity				*GetHeadEntity() { return head.GetEntity(); };
 
 protected:
 	friend class			idAnimState;
 
-	float					fovDot;				// cos( fovDegrees )
-	idVec3					eyeOffset;			// offset of eye relative to physics origin
-	idVec3					modelOffset;		// offset of visual model relative to the physics origin
+	float					fovDot;					// cos( fovDegrees )
+	idVec3					eyeOffset;				// offset of eye relative to physics origin
+	idVec3					modelOffset;			// offset of visual model relative to the physics origin
 
-	idAngles				deltaViewAngles;	// delta angles relative to view input angles
+	idAngles				deltaViewAngles;		// delta angles relative to view input angles
 
-	int						pain_debounce_time;	// next time the actor can show pain
-	int						pain_delay;			// time between playing pain sound
-	int						pain_threshold;		// how much damage monster can take at any one time before playing pain animation
+	int						pain_debounce_time;		// next time the actor can show pain
+	int						pain_delay;				// time between playing pain sound
+	int						pain_threshold;			// how much damage monster can take at any one time before playing pain animation
 
-	idStrList				damageGroups;		// body damage groups
-	idList<float>			damageScale;		// damage scale per damage gruop
+	idStrList				damageGroups;			// body damage groups
+	idList<float>			damageScale;			// damage scale per damage gruop
 
 	bool						use_combat_bbox;	// whether to use the bounding box for combat collision
 	idEntityPtr<idAFAttachment>	head;
@@ -250,7 +250,7 @@ protected:
 	int						blink_max;
 
 	// script variables
-	idThread *				scriptThread;
+	idThread				*scriptThread;
 	idStr					waitState;
 	idAnimState				headAnim;
 	idAnimState				torsoAnim;
@@ -258,9 +258,9 @@ protected:
 
 	bool					allowPain;
 	bool					allowEyeFocus;
-	bool					finalBoss;
-
 	int						painTime;
+	int						damageCap;
+	int						finalBoss;
 
 	idList<idAttachInfo>	attachments;
 
@@ -273,20 +273,26 @@ protected:
 	void					CopyJointsFromBodyToHead( void );
 
 private:
+	// liquid support --->
+	bool					splashSoundChannel;
+	int						splashSoundTime;
+	// <---
+
 	void					SyncAnimChannels( int channel, int syncToChannel, int blendFrames );
 	void					FinishSetup( void );
 	void					SetupHead( void );
 	void					PlayFootStepSound( void );
+	void					FootStepFX( const char *joint );
 
+	void					Event_Footstep( void );
+	void					Event_FootstepFX( const char *joint );
 	void					Event_EnableEyeFocus( void );
 	void					Event_DisableEyeFocus( void );
-	void					Event_Footstep( void );
 	void					Event_EnableWalkIK( void );
 	void					Event_DisableWalkIK( void );
 	void					Event_EnableLegIK( int num );
 	void					Event_DisableLegIK( int num );
 	void					Event_SetAnimPrefix( const char *name );
-	void					Event_LookAtEntity( idEntity *ent, float duration );
 	void					Event_PreventPain( float duration );
 	void					Event_DisablePain( void );
 	void					Event_EnablePain( void );
@@ -318,6 +324,15 @@ private:
 	void					Event_SetState( const char *name );
 	void					Event_GetState( void );
 	void					Event_GetHead( void );
+	void					Event_SetDamageGroupScale( const char *groupName, float scale );
+	void					Event_SetDamageGroupScaleAll( float scale );
+	void					Event_GetDamageGroupScale( const char *groupName );
+	void					Event_SetDamageCap( float _damageCap );
+	void					Event_SetWaitState( const char *waitState );
+	void					Event_GetWaitState();
+
+	void					Event_HasDamageFx( void );
+	void					Event_TouchingSurfType( void );
 };
 
 #endif /* !__GAME_ACTOR_H__ */

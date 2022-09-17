@@ -26,19 +26,26 @@ If you have questions concerning this license or the applicable additional terms
 ===========================================================================
 */
 
+//	NOTE: even though this file is part of the Doom3 GPL source, it has never  been part of the build.
+
+#ifdef END_LEVEL
+
 #include "sys/platform.h"
+
+#include "Player.h"
 
 #include "EndLevel.h"
 
 /*
+===============================================================================
 
-  game_endlevel.cpp
+	game_endlevel.cpp
 
-  This entity is targeted to complete a level, and it also handles
-  running the stats and moving the camera.
+	This entity is targeted to complete a level, and it also handles
+	running the stats and moving the camera.
 
+===============================================================================
 */
-
 
 CLASS_DECLARATION( idEntity, idTarget_EndLevel )
 	EVENT( EV_Activate,		idTarget_EndLevel::Event_Trigger )
@@ -50,14 +57,14 @@ idTarget_EndLevel::Spawn
 ================
 */
 void idTarget_EndLevel::Spawn( void ) {
-	idStr		guiName;
+	idStr guiName;
 
 	gui = NULL;
-	noGui = spawnArgs.GetBool("noGui");
-	if (!noGui) {
+	noGui = spawnArgs.GetBool( "noGui" );
+	if ( !noGui ) {
 		spawnArgs.GetString( "guiName", "guis/EndLevel.gui", guiName );
 
-		if (guiName.Length()) {
+		if ( guiName.Length() ) {
 			gui = idUserInterface::FindGui( guiName, true, false, true );
 		}
 	}
@@ -74,8 +81,8 @@ idTarget_EndLevel::~idTarget_EndLevel()
 ================
 */
 idTarget_EndLevel::~idTarget_EndLevel() {
-	//FIXME: need to go to smart ptrs for gui allocs or the unique method
-	//delete gui;
+	// FIXME: need to go to smart ptrs for gui allocs or the unique method
+//	delete gui;
 }
 
 /*
@@ -93,7 +100,7 @@ void idTarget_EndLevel::Event_Trigger( idEntity *activator ) {
 	gameLocal.endLevel = this;
 
 	// grab the activating player view position
-	idPlayer *player = (idPlayer *)(activator);
+	idPlayer *player = ( idPlayer* )( activator );
 
 	initialViewOrg = player->GetEyePosition();
 	initialViewAngles = idVec3( player->viewAngles[0], player->viewAngles[1], player->viewAngles[2] );
@@ -112,12 +119,11 @@ idTarget_EndLevel::Draw
 ================
 */
 void idTarget_EndLevel::Draw() {
-
-	if (noGui) {
+	if ( noGui ) {
 		return;
 	}
 
-	renderView_t			renderView;
+	renderView_t renderView;
 
 	memset( &renderView, 0, sizeof( renderView ) );
 
@@ -132,7 +138,7 @@ void idTarget_EndLevel::Draw() {
 
 #if 0
 	renderView.vieworg = initialViewOrg;
-	renderView.viewaxis = idAngles(initialViewAngles).toMat3();
+	renderView.viewaxis = idAngles( initialViewAngles ).toMat3();
 #else
 	renderView.vieworg = renderEntity.origin;
 	renderView.viewaxis = renderEntity.axis;
@@ -174,7 +180,7 @@ const char *idTarget_EndLevel::ExitCommand() {
 
 	idStr nextMap;
 
-	if (spawnArgs.GetString( "nextMap", "", nextMap )) {
+	if ( spawnArgs.GetString( "nextMap", "", nextMap ) ) {
 		sprintf( exitCommand, "map %s", nextMap.c_str() );
 	} else {
 		exitCommand = "";
@@ -182,3 +188,5 @@ const char *idTarget_EndLevel::ExitCommand() {
 
 	return exitCommand;
 }
+
+#endif END_LEVEL

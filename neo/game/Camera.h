@@ -36,7 +36,7 @@ If you have questions concerning this license or the applicable additional terms
 /*
 ===============================================================================
 
-Camera providing an alternative view of the level.
+	Camera providing an alternative view of the level.
 
 ===============================================================================
 */
@@ -47,14 +47,14 @@ public:
 
 	void					Spawn( void );
 	virtual void			GetViewParms( renderView_t *view ) = 0;
-	virtual renderView_t *	GetRenderView();
+	virtual renderView_t	*GetRenderView();
 	virtual void			Stop( void ){} ;
 };
 
 /*
 ===============================================================================
 
-idCameraView
+	idCameraView
 
 ===============================================================================
 */
@@ -81,20 +81,18 @@ protected:
 	idEntity				*attachedView;
 };
 
-
-
 /*
 ===============================================================================
 
-A camera which follows a path defined by an animation.
+	A camera which follows a path defined by an animation.
 
 ===============================================================================
 */
 
 typedef struct {
-	idCQuat				q;
-	idVec3				t;
-	float				fov;
+	idCQuat					q;
+	idVec3					t;
+	float					fov;
 } cameraFrame_t;
 
 class idCameraAnim : public idCamera {

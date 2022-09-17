@@ -28,6 +28,8 @@ If you have questions concerning this license or the applicable additional terms
 
 #include "sys/platform.h"
 #include "renderer/ModelManager.h"
+
+#include "Entity.h"
 #include "Game_local.h"
 
 #include "SmokeParticles.h"
@@ -85,8 +87,8 @@ void idSmokeParticles::Init( void ) {
 	renderEntity.noShadow = 1;
 
 	// huge bounds, so it will be present in every world area
-	renderEntity.bounds.AddPoint( idVec3(-100000, -100000, -100000) );
-	renderEntity.bounds.AddPoint( idVec3( 100000,  100000,  100000) );
+	renderEntity.bounds.AddPoint( idVec3( -100000, -100000, -100000 ) );
+	renderEntity.bounds.AddPoint( idVec3( 100000,  100000,  100000 ) );
 
 	renderEntity.callback = idSmokeParticles::ModelCallback;
 	// add to renderer list
@@ -126,11 +128,15 @@ void idSmokeParticles::FreeSmokes( void ) {
 
 		activeSmokeStage_t *active = &activeStages[activeStageNum];
 		const idParticleStage *stage = active->stage;
-
 		for ( last = NULL, smoke = active->smokes; smoke; smoke = next ) {
 			next = smoke->next;
+			float frac;
 
-			float frac = (float)( gameLocal.time - smoke->privateStartTime ) / ( stage->particleLife * 1000 );
+			if ( smoke->timeGroup ) {
+				frac = ( float )( gameLocal.fast.time - smoke->privateStartTime ) / ( stage->particleLife * 1000 );
+			} else {
+				frac = ( float )( gameLocal.slow.time - smoke->privateStartTime ) / ( stage->particleLife * 1000 );
+			}
 			if ( frac >= 1.0f ) {
 				// remove the particle from the stage list
 				if ( last != NULL ) {
@@ -144,7 +150,6 @@ void idSmokeParticles::FreeSmokes( void ) {
 				numActiveSmokes--;
 				continue;
 			}
-
 			last = smoke;
 		}
 
@@ -163,8 +168,10 @@ idSmokeParticles::EmitSmoke
 Called by game code to drop another particle into the list
 ================
 */
-bool idSmokeParticles::EmitSmoke( const idDeclParticle *smoke, const int systemStartTime, const float diversity, const idVec3 &origin, const idMat3 &axis ) {
-	bool	continues = false;
+bool idSmokeParticles::EmitSmoke( const idDeclParticle *smoke, const int systemStartTime, const float diversity, const idVec3 &origin, const idMat3 &axis, int timeGroup ) {
+	bool continues = false;
+
+	SetTimeState ts( timeGroup );
 
 	if ( !smoke ) {
 		return false;
@@ -183,8 +190,6 @@ bool idSmokeParticles::EmitSmoke( const idDeclParticle *smoke, const int systemS
 	if ( systemStartTime > gameLocal.time ) {
 		return false;
 	}
-
-	idRandom steppingRandom( 0xffff * diversity );
 
 	// for each stage in the smoke that is still emitting particles, emit a new singleSmoke_t
 	for ( int stageNum = 0; stageNum < smoke->stages.Num(); stageNum++ ) {
@@ -206,8 +211,8 @@ bool idSmokeParticles::EmitSmoke( const idDeclParticle *smoke, const int systemS
 		// FIXME:			smoke.privateStartTime += stage->timeOffset;
 		int		finalParticleTime = stage->cycleMsec * stage->spawnBunching;
 		int		deltaMsec = gameLocal.time - systemStartTime;
+		int		nowCount = 0, prevCount = 0;
 
-		int		nowCount, prevCount;
 		if ( finalParticleTime == 0 ) {
 			// if spawnBunching is 0, they will all come out at once
 			if ( gameLocal.time == systemStartTime ) {
@@ -217,11 +222,11 @@ bool idSmokeParticles::EmitSmoke( const idDeclParticle *smoke, const int systemS
 				prevCount = stage->totalParticles;
 			}
 		} else {
-			nowCount = floor( ( (float)deltaMsec / finalParticleTime ) * stage->totalParticles );
+			nowCount = floor( ( ( float )deltaMsec / finalParticleTime ) * stage->totalParticles );
 			if ( nowCount >= stage->totalParticles ) {
 				nowCount = stage->totalParticles-1;
 			}
-			prevCount = floor( ((float)( deltaMsec - USERCMD_MSEC ) / finalParticleTime) * stage->totalParticles );
+			prevCount = floor( ( ( float )( deltaMsec - gameLocal.msec ) / finalParticleTime ) * stage->totalParticles );
 			if ( prevCount < -1 ) {
 				prevCount = -1;
 			}
@@ -257,7 +262,8 @@ bool idSmokeParticles::EmitSmoke( const idDeclParticle *smoke, const int systemS
 		}
 
 		// add all the required particles
-		for ( prevCount++ ; prevCount <= nowCount ; prevCount++ ) {
+		idRandom steppingRandom( 0xffff * diversity );
+		for ( prevCount++ ; prevCount <= nowCount && active != NULL ; prevCount++ ) {
 			if ( !freeSmokes ) {
 				gameLocal.Printf( "idSmokeParticles::EmitSmoke: no free smokes with %d active stages\n", activeStages.Num() );
 				return true;
@@ -266,6 +272,7 @@ bool idSmokeParticles::EmitSmoke( const idDeclParticle *smoke, const int systemS
 			freeSmokes = freeSmokes->next;
 			numActiveSmokes++;
 
+			newSmoke->timeGroup = timeGroup;
 			newSmoke->index = prevCount;
 			newSmoke->axis = axis;
 			newSmoke->origin = origin;
@@ -287,13 +294,10 @@ idSmokeParticles::UpdateRenderEntity
 ================
 */
 bool idSmokeParticles::UpdateRenderEntity( renderEntity_s *renderEntity, const renderView_t *renderView ) {
-
-	// FIXME: re-use model surfaces
-	renderEntity->hModel->InitEmpty( smokeParticle_SnapshotName );
-
 	// this may be triggered by a model trace or other non-view related source,
 	// to which we should look like an empty model
 	if ( !renderView ) {
+		renderEntity->hModel->InitEmpty( smokeParticle_SnapshotName );
 		return false;
 	}
 
@@ -301,10 +305,13 @@ bool idSmokeParticles::UpdateRenderEntity( renderEntity_s *renderEntity, const r
 	if ( renderView->time == currentParticleTime && !renderView->forceUpdate ) {
 		return false;
 	}
+
+	// FIXME: re-use model surfaces
+	renderEntity->hModel->InitEmpty( smokeParticle_SnapshotName );
+
 	currentParticleTime = renderView->time;
 
 	particleGen_t g;
-
 	g.renderEnt = renderEntity;
 	g.renderView = renderView;
 
@@ -340,7 +347,11 @@ bool idSmokeParticles::UpdateRenderEntity( renderEntity_s *renderEntity, const r
 		for ( last = NULL, smoke = active->smokes; smoke; smoke = next ) {
 			next = smoke->next;
 
-			g.frac = (float)( gameLocal.time - smoke->privateStartTime ) / ( stage->particleLife * 1000 );
+			if ( smoke->timeGroup ) {
+				g.frac = ( float )( gameLocal.fast.time - smoke->privateStartTime ) / ( stage->particleLife * 1000 );
+			} else {
+				g.frac = ( float )( gameLocal.time - smoke->privateStartTime ) / ( stage->particleLife * 1000 );
+			}
 			if ( g.frac >= 1.0f ) {
 				// remove the particle from the stage list
 				if ( last != NULL ) {

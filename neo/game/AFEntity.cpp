@@ -33,6 +33,7 @@ If you have questions concerning this license or the applicable additional terms
 #include "gamesys/SysCvar.h"
 #include "Item.h"
 #include "Player.h"
+#include "Fx.h"
 #include "SmokeParticles.h"
 
 #include "AFEntity.h"
@@ -40,7 +41,7 @@ If you have questions concerning this license or the applicable additional terms
 /*
 ===============================================================================
 
-  idMultiModelAF
+	idMultiModelAF
 
 ===============================================================================
 */
@@ -71,6 +72,8 @@ idMultiModelAF::~idMultiModelAF( void ) {
 			modelDefHandles[i] = -1;
 		}
 	}
+
+	SetPhysics( NULL );
 }
 
 /*
@@ -79,8 +82,8 @@ idMultiModelAF::SetModelForId
 ================
 */
 void idMultiModelAF::SetModelForId( int id, const idStr &modelName ) {
-	modelHandles.AssureSize( id+1, NULL );
-	modelDefHandles.AssureSize( id+1, -1 );
+	modelHandles.AssureSize( id + 1, NULL );
+	modelDefHandles.AssureSize( id + 1, -1 );
 	modelHandles[id] = renderModelManager->FindModel( modelName );
 }
 
@@ -126,13 +129,18 @@ idMultiModelAF::Think
 void idMultiModelAF::Think( void ) {
 	RunPhysics();
 	Present();
-}
 
+	// DentonMod --->
+	if ( thinkFlags & TH_UPDATEWOUNDPARTICLES ) {
+		UpdateParticles();
+	}
+	// <---
+}
 
 /*
 ===============================================================================
 
-  idChain
+	idChain
 
 ===============================================================================
 */
@@ -144,9 +152,9 @@ END_CLASS
 ================
 idChain::BuildChain
 
-  builds a chain hanging down from the ceiling
-  the highest link is a child of the link below it etc.
-  this allows an object to be attached to multiple chains while keeping a single tree structure
+ * builds a chain hanging down from the ceiling
+ * the highest link is a child of the link below it etc.
+ * this allows an object to be attached to multiple chains while keeping a single tree structure
 ================
 */
 void idChain::BuildChain( const idStr &name, const idVec3 &origin, float linkLength, float linkWidth, float density, int numLinks, bool bindToWorld ) {
@@ -164,15 +172,15 @@ void idChain::BuildChain( const idStr &name, const idVec3 &origin, float linkLen
 	trm.Translate( -trm.offset );
 
 	org = origin - idVec3( 0, 0, halfLinkLength );
-
 	lastBody = NULL;
+
 	for ( i = 0; i < numLinks; i++ ) {
 
 		// add body
 		clip = new idClipModel( trm );
 		clip->SetContents( CONTENTS_SOLID );
 		clip->Link( gameLocal.clip, this, 0, org, mat3_identity );
-		body = new idAFBody( name + idStr(i), clip, density );
+		body = new idAFBody( name + idStr( i ), clip, density );
 		physicsObj.AddBody( body );
 
 		// visual model for body
@@ -181,23 +189,20 @@ void idChain::BuildChain( const idStr &name, const idVec3 &origin, float linkLen
 		// add constraint
 		if ( bindToWorld ) {
 			if ( !lastBody ) {
-				uj = new idAFConstraint_UniversalJoint( name + idStr(i), body, lastBody );
+				uj = new idAFConstraint_UniversalJoint( name + idStr( i ), body, lastBody );
 				uj->SetShafts( idVec3( 0, 0, -1 ), idVec3( 0, 0, 1 ) );
-				//uj->SetConeLimit( idVec3( 0, 0, -1 ), 30.0f );
-				//uj->SetPyramidLimit( idVec3( 0, 0, -1 ), idVec3( 1, 0, 0 ), 90.0f, 30.0f );
-			}
-			else {
-				uj = new idAFConstraint_UniversalJoint( name + idStr(i), lastBody, body );
+			} else {
+				uj = new idAFConstraint_UniversalJoint( name + idStr( i ), lastBody, body );
 				uj->SetShafts( idVec3( 0, 0, 1 ), idVec3( 0, 0, -1 ) );
-				//uj->SetConeLimit( idVec3( 0, 0, 1 ), 30.0f );
 			}
 			uj->SetAnchor( org + idVec3( 0, 0, halfLinkLength ) );
 			uj->SetFriction( 0.9f );
 			physicsObj.AddConstraint( uj );
-		}
-		else {
+
+		} else {
+
 			if ( lastBody ) {
-				bsj = new idAFConstraint_BallAndSocketJoint( "joint" + idStr(i), lastBody, body );
+				bsj = new idAFConstraint_BallAndSocketJoint( "joint" + idStr( i ), lastBody, body );
 				bsj->SetAnchor( org + idVec3( 0, 0, halfLinkLength ) );
 				bsj->SetConeLimit( idVec3( 0, 0, 1 ), 60.0f, idVec3( 0, 0, 1 ) );
 				physicsObj.AddConstraint( bsj );
@@ -241,7 +246,7 @@ void idChain::Spawn( void ) {
 /*
 ===============================================================================
 
-  idAFAttachment
+	idAFAttachment
 
 ===============================================================================
 */
@@ -267,7 +272,6 @@ idAFAttachment::~idAFAttachment
 =====================
 */
 idAFAttachment::~idAFAttachment( void ) {
-
 	StopSound( SND_CHANNEL_ANY, false );
 
 	delete combatModel;
@@ -324,7 +328,7 @@ idEntity *idAFAttachment::GetBody( void ) const {
 ================
 idAFAttachment::Save
 
-archive object for savegame file
+Archive object for savegame file
 ================
 */
 void idAFAttachment::Save( idSaveGame *savefile ) const {
@@ -337,11 +341,11 @@ void idAFAttachment::Save( idSaveGame *savefile ) const {
 ================
 idAFAttachment::Restore
 
-unarchives object from save game file
+Unarchives object from save game file
 ================
 */
 void idAFAttachment::Restore( idRestoreGame *savefile ) {
-	savefile->ReadObject( reinterpret_cast<idClass *&>( body ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( body ) );
 	savefile->ReadInt( idleAnim );
 	savefile->ReadJoint( attachJoint );
 
@@ -387,15 +391,18 @@ void idAFAttachment::Damage( idEntity *inflictor, idEntity *attacker, const idVe
 /*
 ================
 idAFAttachment::AddDamageEffect
+
+ * modified from DentonMod
 ================
 */
-void idAFAttachment::AddDamageEffect( const trace_t &collision, const idVec3 &velocity, const char *damageDefName ) {
+void idAFAttachment::AddDamageEffect( const trace_t &collision, const idVec3 &velocity, const char *damageDefName, idEntity *soundEnt ) {
 	if ( body ) {
 		trace_t c = collision;
 		c.c.id = JOINT_HANDLE_TO_CLIPMODEL_ID( attachJoint );
-		body->AddDamageEffect( c, velocity, damageDefName );
+		body->AddDamageEffect( c, velocity, damageDefName, soundEnt );
 	}
 }
+
 
 /*
 ================
@@ -454,9 +461,13 @@ idAfAttachment::Think
 */
 void idAFAttachment::Think( void ) {
 	idAnimatedEntity::Think();
+
+	/*
+	DentonMod : This has been taken care of by idAnimatedEntity, so we wont need it now
 	if ( thinkFlags & TH_UPDATEPARTICLES ) {
 		UpdateDamageEffects();
 	}
+	*/
 }
 
 /*
@@ -493,7 +504,7 @@ void idAFAttachment::LinkCombat( void ) {
 		return;
 	}
 
-	if ( combatModel ) {
+	if ( combatModel != NULL ) {
 		combatModel->Link( gameLocal.clip, this, 0, renderEntity.origin, renderEntity.axis, modelDefHandle );
 	}
 }
@@ -504,16 +515,15 @@ idAFAttachment::UnlinkCombat
 ================
 */
 void idAFAttachment::UnlinkCombat( void ) {
-	if ( combatModel ) {
+	if ( combatModel != NULL ) {
 		combatModel->Unlink();
 	}
 }
 
-
 /*
 ===============================================================================
 
-  idAFEntity_Base
+	idAFEntity_Base
 
 ===============================================================================
 */
@@ -608,6 +618,11 @@ bool idAFEntity_Base::LoadAF( void ) {
 		gameLocal.Error( "idAFEntity_Base::LoadAF: Couldn't load af file '%s' on entity '%s'", fileName.c_str(), name.c_str() );
 	}
 
+	float mass = spawnArgs.GetFloat( "mass", "-1" );
+	if ( mass > 0.0f ) {
+		af.GetPhysics()->SetMass( mass );
+	}
+
 	af.Start();
 
 	af.GetPhysics()->Rotate( spawnAxis.ToRotation() );
@@ -628,12 +643,22 @@ idAFEntity_Base::Think
 ================
 */
 void idAFEntity_Base::Think( void ) {
-	RunPhysics();
-	UpdateAnimation();
+
+	if ( !IsHidden() ) {
+		RunPhysics();
+		UpdateAnimation();
+	}
+
 	if ( thinkFlags & TH_UPDATEVISUALS ) {
 		Present();
 		LinkCombat();
 	}
+
+	// DentonMod --->
+	if ( thinkFlags & TH_UPDATEWOUNDPARTICLES ) {
+		UpdateDamageEffects();
+	}
+	// <---
 }
 
 /*
@@ -756,8 +781,17 @@ bool idAFEntity_Base::Collide( const trace_t &collision, const idVec3 &velocity 
 
 	if ( af.IsActive() ) {
 		v = -( velocity * collision.c.normal );
+
 		if ( v > BOUNCE_SOUND_MIN_VELOCITY && gameLocal.time > nextSoundTime ) {
-			f = v > BOUNCE_SOUND_MAX_VELOCITY ? 1.0f : idMath::Sqrt( v - BOUNCE_SOUND_MIN_VELOCITY ) * ( 1.0f / idMath::Sqrt( BOUNCE_SOUND_MAX_VELOCITY - BOUNCE_SOUND_MIN_VELOCITY ) );
+
+			if ( v > BOUNCE_SOUND_MAX_VELOCITY ) {
+				f = 1.0f;
+			} else if ( v <= BOUNCE_SOUND_MIN_VELOCITY ) {
+				f = 0.0f;
+			} else {
+				f = ( v - BOUNCE_SOUND_MIN_VELOCITY ) * ( 1.0f / ( BOUNCE_SOUND_MAX_VELOCITY - BOUNCE_SOUND_MIN_VELOCITY ) );
+			}
+
 			if ( StartSound( "snd_bounce", SND_CHANNEL_ANY, 0, false, NULL ) ) {
 				// don't set the volume unless there is a bounce sound as it overrides the entire channel
 				// which causes footsteps on ai's to not honor their shader parms
@@ -847,7 +881,8 @@ void idAFEntity_Base::LinkCombat( void ) {
 	if ( fl.hidden ) {
 		return;
 	}
-	if ( combatModel ) {
+
+	if ( combatModel != NULL ) {
 		combatModel->Link( gameLocal.clip, this, 0, renderEntity.origin, renderEntity.axis, modelDefHandle );
 	}
 }
@@ -858,7 +893,7 @@ idAFEntity_Base::UnlinkCombat
 ================
 */
 void idAFEntity_Base::UnlinkCombat( void ) {
-	if ( combatModel ) {
+	if ( combatModel != NULL ) {
 		combatModel->Unlink();
 	}
 }
@@ -886,15 +921,16 @@ void idAFEntity_Base::ShowEditingDialog( void ) {
 ================
 idAFEntity_Base::DropAFs
 
-  The entity should have the following key/value pairs set:
-	"def_drop<type>AF"		"af def"
-	"drop<type>Skin"		"skin name"
-  To drop multiple articulated figures the following key/value pairs can be used:
-	"def_drop<type>AF*"		"af def"
-  where * is an aribtrary string.
+The entity should have the following key/value pairs set:
+"def_drop<type>AF"		"af def"
+"drop<type>Skin"		"skin name"
+ 
+ To drop multiple articulated figures the following key/value pairs can be used:
+"def_drop<type>AF*"		"af def"
+ where * is an aribtrary string.
 ================
 */
-void idAFEntity_Base::DropAFs( idEntity *ent, const char *type, idList<idEntity *> *list ) {
+void idAFEntity_Base::DropAFs( idEntity *ent, const char *type, idList<idEntity*> *list ) {
 	const idKeyValue *kv;
 	const char *skinName;
 	idEntity *newEnt;
@@ -905,12 +941,11 @@ void idAFEntity_Base::DropAFs( idEntity *ent, const char *type, idList<idEntity 
 	// drop the articulated figures
 	kv = ent->spawnArgs.MatchPrefix( va( "def_drop%sAF", type ), NULL );
 	while ( kv ) {
-
 		args.Set( "classname", kv->GetValue() );
 		gameLocal.SpawnEntityDef( args, &newEnt );
 
 		if ( newEnt && newEnt->IsType( idAFEntity_Base::Type ) ) {
-			af = static_cast<idAFEntity_Base *>(newEnt);
+			af = static_cast<idAFEntity_Base*>( newEnt );
 			af->GetPhysics()->SetOrigin( ent->GetPhysics()->GetOrigin() );
 			af->GetPhysics()->SetAxis( ent->GetPhysics()->GetAxis() );
 			af->af.SetupPose( ent, gameLocal.time );
@@ -918,7 +953,6 @@ void idAFEntity_Base::DropAFs( idEntity *ent, const char *type, idList<idEntity 
 				list->Append( af );
 			}
 		}
-
 		kv = ent->spawnArgs.MatchPrefix( va( "def_drop%sAF", type ), kv );
 	}
 
@@ -942,7 +976,7 @@ void idAFEntity_Base::Event_SetConstraintPosition( const char *name, const idVec
 /*
 ===============================================================================
 
-idAFEntity_Gibbable
+	idAFEntity_Gibbable
 
 ===============================================================================
 */
@@ -964,7 +998,14 @@ idAFEntity_Gibbable::idAFEntity_Gibbable
 idAFEntity_Gibbable::idAFEntity_Gibbable( void ) {
 	skeletonModel = NULL;
 	skeletonModelDefHandle = -1;
+	gibHealth = 0;
 	gibbed = false;
+	wasThrown = false;
+
+	// Damaging FX (Ivan) --->
+	dmgFxEntities.Clear();
+	allowDmgfxs = false;
+	// <---
 }
 
 /*
@@ -985,8 +1026,19 @@ idAFEntity_Gibbable::Save
 ================
 */
 void idAFEntity_Gibbable::Save( idSaveGame *savefile ) const {
+	savefile->WriteInt( gibHealth );
 	savefile->WriteBool( gibbed );
 	savefile->WriteBool( combatModel != NULL );
+	savefile->WriteBool( wasThrown );
+
+	// Damaging FX (Ivan) --->
+	int i;
+	savefile->WriteBool( allowDmgfxs );
+	savefile->WriteInt( dmgFxEntities.Num() );
+	for( i = 0; i < dmgFxEntities.Num(); i++ ) {
+		dmgFxEntities[ i ].Save( savefile );
+	}
+	// <---
 }
 
 /*
@@ -997,8 +1049,22 @@ idAFEntity_Gibbable::Restore
 void idAFEntity_Gibbable::Restore( idRestoreGame *savefile ) {
 	bool hasCombatModel;
 
+	savefile->ReadInt( gibHealth );
 	savefile->ReadBool( gibbed );
 	savefile->ReadBool( hasCombatModel );
+	savefile->ReadBool( wasThrown );
+
+	// Damaging FX (Ivan) --->
+	int i, num;
+	savefile->ReadBool( allowDmgfxs );
+
+	dmgFxEntities.Clear();
+	savefile->ReadInt( num );
+	dmgFxEntities.SetNum( num );
+	for( i = 0; i < num; i++ ) {
+		dmgFxEntities[ i ].Restore( savefile );
+	}
+	//	<---
 
 	InitSkeletonModel();
 
@@ -1016,7 +1082,15 @@ idAFEntity_Gibbable::Spawn
 void idAFEntity_Gibbable::Spawn( void ) {
 	InitSkeletonModel();
 
+	gibHealth = spawnArgs.GetInt( "gibHealth" );
+	if ( gibHealth == 0 ) {
+		gibHealth = -25;
+	}
+
 	gibbed = false;
+	wasThrown = false;
+
+	spawnArgs.GetBool( "allowDmgfxs", "0", allowDmgfxs );	// Damaging FX (Ivan)
 }
 
 /*
@@ -1031,11 +1105,10 @@ void idAFEntity_Gibbable::InitSkeletonModel( void ) {
 	skeletonModel = NULL;
 	skeletonModelDefHandle = -1;
 
-	modelName = spawnArgs.GetString( "model_gib" );
-
 	modelDef = NULL;
+	modelName = spawnArgs.GetString( "model_gib" );
 	if ( modelName[0] != '\0' ) {
-		modelDef = static_cast<const idDeclModelDef *>( declManager->FindType( DECL_MODELDEF, modelName, false ) );
+		modelDef = static_cast<const idDeclModelDef*>( declManager->FindType( DECL_MODELDEF, modelName, false ) );
 		if ( modelDef ) {
 			skeletonModel = modelDef->ModelHandle();
 		} else {
@@ -1091,10 +1164,90 @@ void idAFEntity_Gibbable::Damage( idEntity *inflictor, idEntity *attacker, const
 	if ( !fl.takedamage ) {
 		return;
 	}
+
 	idAFEntity_Base::Damage( inflictor, attacker, dir, damageDefName, damageScale, location );
-	if ( health < -20 && spawnArgs.GetBool( "gib" ) ) {
+
+	const idDict *damageDef = gameLocal.FindEntityDefDict( damageDefName );
+	if ( damageDef == NULL ) {
+		gameLocal.Error( "Unknown damageDef '%s'\n", damageDefName );
+	}
+
+	// ragdolls can be gibbed only by guns that gib
+	if ( health < gibHealth && spawnArgs.GetBool( "gib" ) && damageDef->GetBool( "gib" ) ) {
 		Gib( dir, damageDefName );
 	}
+
+	// Damaging FX --->
+	if ( allowDmgfxs && !gibbed ) {
+		CheckDamageFx( damageDef, attacker ); 
+	}
+	//	<---
+}
+
+
+/*
+============
+idAFEntity_Gibbable::Killed
+============
+*/
+void idAFEntity_Gibbable::Killed( idEntity *inflictor, idEntity *attacker, int damage, const idVec3 &dir, int location ) {
+
+	// option to remove the AF same frame it died
+	if ( spawnArgs.GetBool( "remove_on_death" ) ) {
+		this->PostEventSec( &EV_Remove, 0 );
+	}
+
+	// notify dmgFx
+	if( health + damage > 0 ) { // killed by this damage
+		if( allowDmgfxs && !gibbed && dmgFxEntities.Num() > 0 ){
+			KilledDamageFxs(); // this may restart or stop the fx
+		}
+	}
+}
+// <---
+
+/*
+=====================
+idAFEntity_Gibbable::SetThrown
+=====================
+*/
+void idAFEntity_Gibbable::SetThrown( bool isThrown ) {
+	if ( isThrown ) {
+		int i, num = af.GetPhysics()->GetNumBodies();
+
+		for ( i=0; i<num; i++ ) {
+			idAFBody *body;
+			body = af.GetPhysics()->GetBody( i );
+			body->SetClipMask( MASK_MONSTERSOLID );
+		}
+	}
+
+	wasThrown = isThrown;
+}
+
+/*
+=====================
+idAFEntity_Gibbable::Collide
+=====================
+*/
+bool idAFEntity_Gibbable::Collide( const trace_t &collision, const idVec3 &velocity ) {
+	if ( !gibbed && wasThrown ) {
+
+		// Everything gibs (if possible)
+		if ( spawnArgs.GetBool( "gib" ) ) {
+			idEntity *ent;
+			ent = gameLocal.entities[ collision.c.entityNum ];
+			if ( ent->fl.takedamage ) {
+				ent->Damage( this, gameLocal.GetLocalPlayer(), collision.c.normal, "damage_thrown_ragdoll", 1.f, CLIPMODEL_ID_TO_JOINT_HANDLE( collision.c.id ) );
+			}
+
+			idVec3 vel = velocity;
+			vel.NormalizeFast();
+			Gib( vel, "damage_gib" );
+		}
+	}
+
+	return idAFEntity_Base::Collide( collision, velocity );
 }
 
 /*
@@ -1111,8 +1264,9 @@ void idAFEntity_Gibbable::SpawnGibs( const idVec3 &dir, const char *damageDefNam
 	assert( !gameLocal.isClient );
 
 	const idDict *damageDef = gameLocal.FindEntityDefDict( damageDefName );
-	if ( !damageDef ) {
+	if ( damageDef == NULL ) {
 		gameLocal.Error( "Unknown damageDef '%s'", damageDefName );
+		return;
 	}
 
 	// spawn gib articulated figures
@@ -1120,6 +1274,10 @@ void idAFEntity_Gibbable::SpawnGibs( const idVec3 &dir, const char *damageDefNam
 
 	// spawn gib items
 	idMoveableItem::DropItems( this, "gib", &list );
+
+	// normalize dir
+	idVec3 normDir = dir;
+	normDir.NormalizeFast();
 
 	// blow out the gibs in the given direction away from the center of the entity
 	entityCenter = GetPhysics()->GetAbsBounds().GetCenter();
@@ -1131,16 +1289,28 @@ void idAFEntity_Gibbable::SpawnGibs( const idVec3 &dir, const char *damageDefNam
 			list[i]->GetPhysics()->UnlinkClip();
 			list[i]->GetPhysics()->PutToRest();
 		} else {
-			list[i]->GetPhysics()->SetContents( CONTENTS_CORPSE );
+			list[i]->GetPhysics()->SetContents( 0 );
 			list[i]->GetPhysics()->SetClipMask( CONTENTS_SOLID );
 			velocity = list[i]->GetPhysics()->GetAbsBounds().GetCenter() - entityCenter;
 			velocity.NormalizeFast();
-			velocity += ( i & 1 ) ? dir : -dir;
-			list[i]->GetPhysics()->SetLinearVelocity( velocity * 75.0f );
+			// Sikkpin:  Adding "dir" here cause insane velocities so we add normalized dir
+			velocity += ( i & 1 ) ? normDir : -normDir;
+			// Control velocity via CVar
+			list[i]->GetPhysics()->SetLinearVelocity( velocity * g_gibVelocity.GetInteger() );
 		}
+		// Don't allow grabber to pick up temporary gibs
+		list[i]->noGrab = true;
 		list[i]->GetRenderEntity()->noShadow = true;
-		list[i]->GetRenderEntity()->shaderParms[ SHADERPARM_TIME_OF_DEATH ] = gameLocal.time * 0.001f;
-		list[i]->PostEventSec( &EV_Remove, 4.0f );
+
+		// Gib lifetime
+		float gibLife = g_gibLifeTime.GetFloat();
+		if ( gibLife <= 0.0f ) {
+			// default gibLife
+			gibLife = 4.0f;
+		}
+
+		list[i]->GetRenderEntity()->shaderParms[ SHADERPARM_TIME_OF_DEATH ] = gameLocal.time * /*0.001f*/ gibLife;
+		list[i]->PostEventSec( &EV_Remove, gibLife );
 	}
 }
 
@@ -1155,9 +1325,13 @@ void idAFEntity_Gibbable::Gib( const idVec3 &dir, const char *damageDefName ) {
 		return;
 	}
 
+	// Don't grab this ent after it's been gibbed (and now invisible!)
+	noGrab = true;
+
 	const idDict *damageDef = gameLocal.FindEntityDefDict( damageDefName );
-	if ( !damageDef ) {
+	if ( damageDef == NULL ) {
 		gameLocal.Error( "Unknown damageDef '%s'", damageDefName );
+		return;
 	}
 
 	if ( damageDef->GetBool( "gibNonSolid" ) ) {
@@ -1172,19 +1346,32 @@ void idAFEntity_Gibbable::Gib( const idVec3 &dir, const char *damageDefName ) {
 
 	UnlinkCombat();
 
-	if ( g_bloodEffects.GetBool() ) {
-		if ( gameLocal.time > gameLocal.GetGibTime() ) {
-			gameLocal.SetGibTime( gameLocal.time + GIB_DELAY );
-			SpawnGibs( dir, damageDefName );
-			renderEntity.noShadow = true;
-			renderEntity.shaderParms[ SHADERPARM_TIME_OF_DEATH ] = gameLocal.time * 0.001f;
-			StartSound( "snd_gibbed", SND_CHANNEL_ANY, 0, false, NULL );
-			gibbed = true;
-		}
-	} else {
+	/* Sikkpin : Since "nextGibTime" is a member of idGameLocal and not idAFEntity||idAFEntity_Gibbable
+	 * the folloing if statement is only true once per damage event instead of per entity being damaged.
+	 * This is why only one entity will get gibbed while the rest just disappear after a few seconds.
+	 * I commented this out instead of moving the variable to the proper class because it's easier and
+	 * the delay is only 200ms so the difference should be unnoticable
+	 */
+
+//	if ( g_bloodEffects.GetBool() ) {
+	if ( gameLocal.time > gameLocal.GetGibTime() ) {
+		gameLocal.SetGibTime( gameLocal.time + GIB_DELAY );
+		SpawnGibs( dir, damageDefName );
+		renderEntity.noShadow = true;
+		renderEntity.shaderParms[ SHADERPARM_TIME_OF_DEATH ] = gameLocal.time * 0.001f;
+		StartSound( "snd_gibbed", SND_CHANNEL_ANY, 0, false, NULL );
+		gibbed = true;
+	}
+//	}
+	else {
 		gibbed = true;
 	}
 
+	// Damaging FX (Ivan) --->
+	// turn off dmgfxs on gib
+	StopDamageFxs();
+	allowDmgfxs = false;
+	// <---
 
 	PostEventSec( &EV_Gibbed, 4.0f );
 }
@@ -1198,10 +1385,115 @@ void idAFEntity_Gibbable::Event_Gib( const char *damageDefName ) {
 	Gib( idVec3( 0, 0, 1 ), damageDefName );
 }
 
+// Damaging FX (Ivan) --->
+/*
+=====================
+idAFEntity_Gibbable::CheckDamageFx
+=====================
+*/
+void idAFEntity_Gibbable::CheckDamageFx( const idDict *damageDef, idEntity *attacker ) { 
+	const char *name;
+
+	if ( damageDef->GetString( "dmgFxType", NULL, &name ) ) {
+		if ( spawnArgs.GetString( va( "def_dmgfx_%s", name ), NULL, &name ) && *name != '\0' ) {
+			StartDamageFx( name, attacker );
+		}
+	}
+}
+
+/*
+=====================
+idAFEntity_Gibbable::StartDamageFx
+=====================
+*/
+void idAFEntity_Gibbable::StartDamageFx( const char *defName, idEntity *attacker ) { 
+	int i;
+	idDamagingFx *tempFx;
+
+	// check if the effect is already active --> restart it
+	for ( i = dmgFxEntities.Num() - 1; i >= 0; i-- ) {
+		tempFx = dmgFxEntities[ i ].GetEntity();
+		if ( !tempFx ) {
+			dmgFxEntities.RemoveIndex( i ); // remove invalid ones
+			continue;
+		}
+		if ( !strcmp( tempFx->GetEntityDefName(), defName ) ) {
+			tempFx->SetAttacker( attacker );
+			tempFx->Restart();
+			return;
+		}
+	}
+
+	// start a new one
+	tempFx = idDamagingFx::StartDamagingFx( defName, attacker, this );
+	if ( tempFx ) {
+		idEntityPtr<idDamagingFx> &newFxPtr = dmgFxEntities.Alloc();
+		newFxPtr = tempFx;
+	}
+}
+
+/*
+=====================
+idAFEntity_Gibbable::StopDamageFxs
+=====================
+*/
+void idAFEntity_Gibbable::StopDamageFxs( void ) { 
+	int i;
+	idDamagingFx *tempFx;
+
+	for ( i = dmgFxEntities.Num() - 1; i >= 0; i-- ) {
+		tempFx = dmgFxEntities[ i ].GetEntity();
+		if ( !tempFx ) {
+			dmgFxEntities.RemoveIndex( i ); // remove invalid ones
+			continue;
+		}
+		tempFx->FadeOutFx();
+	}
+}
+
+/*
+=====================
+idAFEntity_Gibbable::RemoveDamageFxs
+=====================
+*/
+void idAFEntity_Gibbable::RemoveDamageFxs( void ){ 
+	int i;
+	idDamagingFx *tempFx;
+
+	for ( i = dmgFxEntities.Num() - 1; i >= 0; i-- ) {
+		tempFx = dmgFxEntities[ i ].GetEntity();
+		if ( !tempFx ) {
+			continue;
+		}
+		tempFx->PostEventMS( &EV_Remove, 0 );
+		dmgFxEntities.RemoveIndex( i );
+	}
+}
+
+/*
+=====================
+idAFEntity_Gibbable::KilledDamageFxs
+=====================
+*/
+void idAFEntity_Gibbable::KilledDamageFxs( void ){ 
+	int i;
+	idDamagingFx *tempFx;
+
+	for ( i = dmgFxEntities.Num() - 1; i >= 0; i-- ) {
+		tempFx = dmgFxEntities[ i ].GetEntity();
+		if ( !tempFx ) {
+			dmgFxEntities.RemoveIndex( i ); // remove invalid ones
+			continue;
+		}
+		tempFx->VictimKilled();
+	}
+}
+//	<---
+
 /*
 ===============================================================================
 
-  idAFEntity_Generic
+	idAFEntity_Generic
 
 ===============================================================================
 */
@@ -1253,7 +1545,7 @@ idAFEntity_Generic::Think
 void idAFEntity_Generic::Think( void ) {
 	idAFEntity_Base::Think();
 
-	if ( keepRunningPhysics ) {
+	if ( keepRunningPhysics && !IsHidden() ) {
 		BecomeActive( TH_PHYSICS );
 	}
 }
@@ -1312,11 +1604,10 @@ void idAFEntity_Generic::Event_Activate( idEntity *activator ) {
 	}
 }
 
-
 /*
 ===============================================================================
 
-  idAFEntity_WithAttachedHead
+	idAFEntity_WithAttachedHead
 
 ===============================================================================
 */
@@ -1353,6 +1644,7 @@ idAFEntity_WithAttachedHead::Spawn
 ================
 */
 void idAFEntity_WithAttachedHead::Spawn( void ) {
+
 	SetupHead();
 
 	LoadAF();
@@ -1362,6 +1654,7 @@ void idAFEntity_WithAttachedHead::Spawn( void ) {
 	SetPhysics( af.GetPhysics() );
 
 	af.GetPhysics()->PutToRest();
+
 	if ( !spawnArgs.GetBool( "nodrop", "0" ) ) {
 		af.GetPhysics()->Activate();
 	}
@@ -1416,11 +1709,17 @@ void idAFEntity_WithAttachedHead::SetupHead( void ) {
 			gameLocal.Error( "Joint '%s' not found for 'head_joint' on '%s'", jointName.c_str(), name.c_str() );
 		}
 
-		headEnt = static_cast<idAFAttachment *>( gameLocal.SpawnEntityType( idAFAttachment::Type, NULL ) );
+		headEnt = static_cast<idAFAttachment*>( gameLocal.SpawnEntityType( idAFAttachment::Type, NULL ) );
 		headEnt->SetName( va( "%s_head", name.c_str() ) );
 		headEnt->SetBody( this, headModel, joint );
 		headEnt->SetCombatModel();
 		head = headEnt;
+
+		idStr xSkin;
+		if ( spawnArgs.GetString( "skin_head_xray", "", xSkin ) ) {
+			headEnt->xraySkin = declManager->FindSkin( xSkin.c_str() );
+			headEnt->UpdateModel();
+		}
 
 		animator.GetJointTransform( joint, gameLocal.time, origin, axis );
 		origin = renderEntity.origin + origin * renderEntity.axis;
@@ -1451,9 +1750,10 @@ void idAFEntity_WithAttachedHead::LinkCombat( void ) {
 		return;
 	}
 
-	if ( combatModel ) {
+	if ( combatModel != NULL ) {
 		combatModel->Link( gameLocal.clip, this, 0, renderEntity.origin, renderEntity.axis, modelDefHandle );
 	}
+
 	headEnt = head.GetEntity();
 	if ( headEnt ) {
 		headEnt->LinkCombat();
@@ -1468,9 +1768,10 @@ idAFEntity_WithAttachedHead::UnlinkCombat
 void idAFEntity_WithAttachedHead::UnlinkCombat( void ) {
 	idAFAttachment *headEnt;
 
-	if ( combatModel ) {
+	if ( combatModel != NULL ) {
 		combatModel->Unlink();
 	}
+
 	headEnt = head.GetEntity();
 	if ( headEnt ) {
 		headEnt->UnlinkCombat();
@@ -1484,6 +1785,7 @@ idAFEntity_WithAttachedHead::Hide
 */
 void idAFEntity_WithAttachedHead::Hide( void ) {
 	idAFEntity_Base::Hide();
+
 	if ( head.GetEntity() ) {
 		head.GetEntity()->Hide();
 	}
@@ -1497,6 +1799,7 @@ idAFEntity_WithAttachedHead::Show
 */
 void idAFEntity_WithAttachedHead::Show( void ) {
 	idAFEntity_Base::Show();
+
 	if ( head.GetEntity() ) {
 		head.GetEntity()->Show();
 	}
@@ -1509,7 +1812,6 @@ idAFEntity_WithAttachedHead::ProjectOverlay
 ================
 */
 void idAFEntity_WithAttachedHead::ProjectOverlay( const idVec3 &origin, const idVec3 &dir, float size, const char *material ) {
-
 	idEntity::ProjectOverlay( origin, dir, size, material );
 
 	if ( head.GetEntity() ) {
@@ -1574,11 +1876,10 @@ void idAFEntity_WithAttachedHead::Event_Activate( idEntity *activator ) {
 	}
 }
 
-
 /*
 ===============================================================================
 
-  idAFEntity_Vehicle
+	idAFEntity_Vehicle
 
 ===============================================================================
 */
@@ -1611,9 +1912,7 @@ void idAFEntity_Vehicle::Spawn( void ) {
 	const char *steeringWheelJointName = spawnArgs.GetString( "steeringWheelJoint", "steeringWheel" );
 
 	LoadAF();
-
 	SetCombatModel();
-
 	SetPhysics( af.GetPhysics() );
 
 	fl.takedamage = true;
@@ -1635,7 +1934,7 @@ void idAFEntity_Vehicle::Spawn( void ) {
 
 	const char *smokeName = spawnArgs.GetString( "smoke_vehicle_dust", "muzzlesmoke" );
 	if ( *smokeName != '\0' ) {
-		dustSmoke = static_cast<const idDeclParticle *>( declManager->FindType( DECL_PARTICLE, smokeName ) );
+		dustSmoke = static_cast<const idDeclParticle*>( declManager->FindType( DECL_PARTICLE, smokeName ) );
 	}
 }
 
@@ -1690,11 +1989,10 @@ float idAFEntity_Vehicle::GetSteerAngle( void ) {
 	return steerAngle;
 }
 
-
 /*
 ===============================================================================
 
-  idAFEntity_VehicleSimple
+	idAFEntity_VehicleSimple
 
 ===============================================================================
 */
@@ -1709,6 +2007,7 @@ idAFEntity_VehicleSimple::idAFEntity_VehicleSimple
 */
 idAFEntity_VehicleSimple::idAFEntity_VehicleSimple( void ) {
 	int i;
+
 	for ( i = 0; i < 4; i++ ) {
 		suspension[i] = NULL;
 	}
@@ -1795,13 +2094,12 @@ void idAFEntity_VehicleSimple::Think( void ) {
 			if ( player->usercmd.forwardmove < 0 ) {
 				velocity = -velocity;
 			}
-			force = idMath::Fabs( player->usercmd.forwardmove * g_vehicleForce.GetFloat() ) * (1.0f / 128.0f);
+			force = idMath::Fabs( player->usercmd.forwardmove * g_vehicleForce.GetFloat() ) * ( 1.0f / 128.0f );
 			steerAngle = GetSteerAngle();
 		}
 
 		// update the wheel motor force and steering
 		for ( i = 0; i < 2; i++ ) {
-
 			// front wheel drive
 			if ( velocity != 0.0f ) {
 				suspension[i]->EnableMotor( true );
@@ -1883,18 +2181,16 @@ void idAFEntity_VehicleSimple::Think( void ) {
 	}
 }
 
-
 /*
 ===============================================================================
 
-  idAFEntity_VehicleFourWheels
+	idAFEntity_VehicleFourWheels
 
 ===============================================================================
 */
 
 CLASS_DECLARATION( idAFEntity_Vehicle, idAFEntity_VehicleFourWheels )
 END_CLASS
-
 
 /*
 ================
@@ -1963,7 +2259,7 @@ void idAFEntity_VehicleFourWheels::Spawn( void ) {
 		if ( !steeringHingeName[0] ) {
 			gameLocal.Error( "idAFEntity_VehicleFourWheels '%s' no '%s' specified", name.c_str(), steeringHingeKeys[i] );
 		}
-		steering[i] = static_cast<idAFConstraint_Hinge *>(af.GetPhysics()->GetConstraint( steeringHingeName ));
+		steering[i] = static_cast<idAFConstraint_Hinge*>( af.GetPhysics()->GetConstraint( steeringHingeName ) );
 		if ( !steering[i] ) {
 			gameLocal.Error( "idAFEntity_VehicleFourWheels '%s': can't find steering hinge '%s'", name.c_str(), steeringHingeName );
 		}
@@ -1993,7 +2289,7 @@ void idAFEntity_VehicleFourWheels::Think( void ) {
 			if ( player->usercmd.forwardmove < 0 ) {
 				velocity = -velocity;
 			}
-			force = idMath::Fabs( player->usercmd.forwardmove * g_vehicleForce.GetFloat() ) * (1.0f / 128.0f);
+			force = idMath::Fabs( player->usercmd.forwardmove * g_vehicleForce.GetFloat() ) * ( 1.0f / 128.0f );
 			steerAngle = GetSteerAngle();
 		}
 
@@ -2036,7 +2332,7 @@ void idAFEntity_VehicleFourWheels::Think( void ) {
 			// give the wheel joint an additional rotation about the wheel axis
 			rotation.SetAngle( RAD2DEG( wheelAngles[i] ) );
 			axis = af.GetPhysics()->GetAxis( 0 );
-			rotation.SetVec( (wheels[i]->GetWorldAxis() * axis.Transpose())[2] );
+			rotation.SetVec( ( wheels[i]->GetWorldAxis() * axis.Transpose() )[2] );
 			animator.SetJointAxis( wheelJoints[i], JOINTMOD_WORLD, rotation.ToMat3() );
 		}
 
@@ -2047,7 +2343,7 @@ void idAFEntity_VehicleFourWheels::Think( void ) {
 			for ( i = 0; i < 4; i++ ) {
 				numContacts = af.GetPhysics()->GetBodyContactConstraints( wheels[i]->GetClipModel()->GetId(), contacts, 2 );
 				for ( int j = 0; j < numContacts; j++ ) {
-					gameLocal.smokeParticles->EmitSmoke( dustSmoke, gameLocal.time, gameLocal.random.RandomFloat(), contacts[j]->GetContact().point, contacts[j]->GetContact().normal.ToMat3() );
+					gameLocal.smokeParticles->EmitSmoke( dustSmoke, gameLocal.time, gameLocal.random.RandomFloat(), contacts[j]->GetContact().point, contacts[j]->GetContact().normal.ToMat3(), timeGroup );
 				}
 			}
 		}
@@ -2060,11 +2356,10 @@ void idAFEntity_VehicleFourWheels::Think( void ) {
 	}
 }
 
-
 /*
 ===============================================================================
 
-  idAFEntity_VehicleSixWheels
+	idAFEntity_VehicleSixWheels
 
 ===============================================================================
 */
@@ -2072,7 +2367,7 @@ void idAFEntity_VehicleFourWheels::Think( void ) {
 CLASS_DECLARATION( idAFEntity_Vehicle, idAFEntity_VehicleSixWheels )
 END_CLASS
 
-	/*
+/*
 ================
 idAFEntity_VehicleSixWheels::idAFEntity_VehicleSixWheels
 ================
@@ -2147,7 +2442,7 @@ void idAFEntity_VehicleSixWheels::Spawn( void ) {
 		if ( !steeringHingeName[0] ) {
 			gameLocal.Error( "idAFEntity_VehicleSixWheels '%s' no '%s' specified", name.c_str(), steeringHingeKeys[i] );
 		}
-		steering[i] = static_cast<idAFConstraint_Hinge *>(af.GetPhysics()->GetConstraint( steeringHingeName ));
+		steering[i] = static_cast<idAFConstraint_Hinge*>( af.GetPhysics()->GetConstraint( steeringHingeName ) );
 		if ( !steering[i] ) {
 			gameLocal.Error( "idAFEntity_VehicleSixWheels '%s': can't find steering hinge '%s'", name.c_str(), steeringHingeName );
 		}
@@ -2164,7 +2459,6 @@ idAFEntity_VehicleSixWheels::Think
 */
 void idAFEntity_VehicleSixWheels::Think( void ) {
 	int i;
-	float force = 0.0f, velocity = 0.0f, steerAngle = 0.0f;
 	idVec3 origin;
 	idMat3 axis;
 	idRotation rotation;
@@ -2177,7 +2471,7 @@ void idAFEntity_VehicleSixWheels::Think( void ) {
 			if ( player->usercmd.forwardmove < 0 ) {
 				velocity = -velocity;
 			}
-			force = idMath::Fabs( player->usercmd.forwardmove * g_vehicleForce.GetFloat() ) * (1.0f / 128.0f);
+			force = idMath::Fabs( player->usercmd.forwardmove * g_vehicleForce.GetFloat() ) * ( 1.0f / 128.0f );
 			steerAngle = GetSteerAngle();
 		}
 
@@ -2190,12 +2484,12 @@ void idAFEntity_VehicleSixWheels::Think( void ) {
 		// adjust wheel velocity for better steering because there are no differentials between the wheels
 		if ( steerAngle < 0.0f ) {
 			for ( i = 0; i < 3; i++ ) {
-				wheels[(i<<1)]->SetContactMotorVelocity( velocity * 0.5f );
+				wheels[( i<<1 )]->SetContactMotorVelocity( velocity * 0.5f );
 			}
 		}
 		else if ( steerAngle > 0.0f ) {
 			for ( i = 0; i < 3; i++ ) {
-				wheels[1+(i<<1)]->SetContactMotorVelocity( velocity * 0.5f );
+				wheels[1 + ( i<<1 )]->SetContactMotorVelocity( velocity * 0.5f );
 			}
 		}
 
@@ -2226,7 +2520,7 @@ void idAFEntity_VehicleSixWheels::Think( void ) {
 			// give the wheel joint an additional rotation about the wheel axis
 			rotation.SetAngle( RAD2DEG( wheelAngles[i] ) );
 			axis = af.GetPhysics()->GetAxis( 0 );
-			rotation.SetVec( (wheels[i]->GetWorldAxis() * axis.Transpose())[2] );
+			rotation.SetVec( ( wheels[i]->GetWorldAxis() * axis.Transpose() )[2] );
 			animator.SetJointAxis( wheelJoints[i], JOINTMOD_WORLD, rotation.ToMat3() );
 		}
 
@@ -2237,7 +2531,7 @@ void idAFEntity_VehicleSixWheels::Think( void ) {
 			for ( i = 0; i < 6; i++ ) {
 				numContacts = af.GetPhysics()->GetBodyContactConstraints( wheels[i]->GetClipModel()->GetId(), contacts, 2 );
 				for ( int j = 0; j < numContacts; j++ ) {
-					gameLocal.smokeParticles->EmitSmoke( dustSmoke, gameLocal.time, gameLocal.random.RandomFloat(), contacts[j]->GetContact().point, contacts[j]->GetContact().normal.ToMat3() );
+					gameLocal.smokeParticles->EmitSmoke( dustSmoke, gameLocal.time, gameLocal.random.RandomFloat(), contacts[j]->GetContact().point, contacts[j]->GetContact().normal.ToMat3(), timeGroup );
 				}
 			}
 		}
@@ -2250,18 +2544,204 @@ void idAFEntity_VehicleSixWheels::Think( void ) {
 	}
 }
 
+/*
+===============================================================================
+
+	idAFEntity_VehicleAutomated
+
+===============================================================================
+*/
+const idEventDef EV_Vehicle_setVelocity( "setVelocity", "f" );
+const idEventDef EV_Vehicle_setTorque( "setTorque", "f" );
+const idEventDef EV_Vehicle_setSteeringSpeed( "setSteeringSpeed", "f" );
+const idEventDef EV_Vehicle_setWaypoint( "setWaypoint", "e" );
+
+CLASS_DECLARATION( idAFEntity_VehicleSixWheels, idAFEntity_VehicleAutomated )
+	EVENT( EV_PostSpawn,				idAFEntity_VehicleAutomated::PostSpawn )
+	EVENT( EV_Vehicle_setVelocity,		idAFEntity_VehicleAutomated::Event_SetVelocity )
+	EVENT( EV_Vehicle_setTorque,		idAFEntity_VehicleAutomated::Event_SetTorque )
+	EVENT( EV_Vehicle_setSteeringSpeed,	idAFEntity_VehicleAutomated::Event_SetSteeringSpeed )
+	EVENT( EV_Vehicle_setWaypoint,		idAFEntity_VehicleAutomated::Event_SetWayPoint )
+END_CLASS
+
+/*
+================
+idAFEntity_VehicleAutomated::Spawn
+================
+*/
+void idAFEntity_VehicleAutomated::Spawn( void ) {
+	velocity = force = steerAngle = 0.f;
+	currentSteering = steeringSpeed = 0.f;
+	originHeight = 0.f;
+	waypoint = NULL;
+
+	spawnArgs.GetFloat( "velocity", "150", velocity );
+	spawnArgs.GetFloat( "torque", "200000", force );
+	spawnArgs.GetFloat( "steeringSpeed", "1", steeringSpeed );
+	spawnArgs.GetFloat( "originHeight", "0", originHeight );
+
+	PostEventMS( &EV_PostSpawn, 0 );
+}
+
+/*
+================
+idAFEntity_VehicleAutomated::PostSpawn
+================
+*/
+void idAFEntity_VehicleAutomated::PostSpawn( void ) {
+	if ( targets.Num() ) {
+		waypoint = targets[0].GetEntity();
+	}
+}
+
+/*
+================
+idAFEntity_VehicleAutomated::Event_SetVelocity
+================
+*/
+void idAFEntity_VehicleAutomated::Event_SetVelocity( float _velocity ) {
+	velocity = _velocity;
+}
+
+/*
+================
+idAFEntity_VehicleAutomated::Event_SetTorque
+================
+*/
+void idAFEntity_VehicleAutomated::Event_SetTorque( float _torque ) {
+	force = _torque;
+}
+
+/*
+================
+idAFEntity_VehicleAutomated::Event_SetSteeringSpeed
+================
+*/
+void idAFEntity_VehicleAutomated::Event_SetSteeringSpeed( float _steeringSpeed ) {
+	steeringSpeed = _steeringSpeed;
+}
+
+/*
+================
+idAFEntity_VehicleAutomated::Event_SetWayPoint
+================
+*/
+void idAFEntity_VehicleAutomated::Event_SetWayPoint( idEntity *_waypoint ) {
+	waypoint = _waypoint;
+}
+
+/*
+================
+idAFEntity_VehicleAutomated::Think
+================
+*/
+#define	HIT_WAYPOINT_THRESHOLD	80.f
+
+void idAFEntity_VehicleAutomated::Think( void ) {
+	// If we don't have a waypoint, coast to a stop
+	if ( !waypoint ) {
+		velocity = force = steerAngle = 0.f;
+		idAFEntity_VehicleSixWheels::Think();
+		return;
+	}
+
+	idVec3 waypoint_origin, vehicle_origin;
+	idVec3 travel_vector;
+	float distance_from_waypoint;
+
+	// Set up the vector from the vehicle origin, to the waypoint
+	vehicle_origin = GetPhysics()->GetOrigin();
+	vehicle_origin.z -= originHeight;
+
+	waypoint_origin = waypoint->GetPhysics()->GetOrigin();
+
+	travel_vector = waypoint_origin - vehicle_origin;
+	distance_from_waypoint = travel_vector.Length();
+
+	// Check if we've hit the waypoint (within a certain threshold)
+	if ( distance_from_waypoint < HIT_WAYPOINT_THRESHOLD ) {
+		idStr				callfunc;
+		const function_t	*func;
+		idThread			*thread;
+
+		// Waypoints can call script functions
+		waypoint->spawnArgs.GetString( "call", "", callfunc );
+		if ( callfunc.Length() ) {
+			func = gameLocal.program.FindFunction( callfunc );
+			if ( func != NULL ) {
+				thread = new idThread( func );
+				thread->DelayedStart( 0 );
+			}
+		}
+
+		// Get next waypoint
+		if ( waypoint->targets.Num() ) {
+			waypoint = waypoint->targets[0].GetEntity();
+		} else {
+			waypoint = NULL;
+		}
+
+		// We are switching waypoints, adjust steering next frame
+		idAFEntity_VehicleSixWheels::Think();
+		return;
+	}
+
+	// Get the angles we need to steer towards
+	idAngles vehicle_angles, travel_angles;
+	travel_angles	= travel_vector.ToAngles().Normalize360();
+	vehicle_angles	= this->GetPhysics()->GetAxis().ToAngles().Normalize360();
+
+	// Get the shortest steering angle towards the travel angles
+	float	delta_yaw;
+	delta_yaw = vehicle_angles.yaw - travel_angles.yaw;
+	if ( idMath::Fabs( delta_yaw ) > 180.f ) {
+		if ( delta_yaw > 0 ) {
+			delta_yaw = delta_yaw - 360;
+		} else {
+			delta_yaw = delta_yaw + 360;
+		}
+	}
+
+	// Maximum steering angle is 35 degrees
+	delta_yaw = idMath::ClampFloat( -35.f, 35.f, delta_yaw );
+
+	idealSteering = delta_yaw;
+
+	// Adjust steering incrementally so it doesn't snap to the ideal angle
+	if ( idMath::Fabs( ( idealSteering - currentSteering ) ) > steeringSpeed ) {
+		if ( idealSteering > currentSteering ) {
+			currentSteering += steeringSpeed;
+		} else {
+			currentSteering -= steeringSpeed;
+		}
+	} else {
+		currentSteering = idealSteering;
+	}
+
+	// DEBUG
+	if ( g_vehicleDebug.GetBool() ) {
+		gameRenderWorld->DebugBounds( colorRed, idBounds( idVec3( -4,-4,-4 ),idVec3( 4,4,4 ) ), vehicle_origin );
+		gameRenderWorld->DebugBounds( colorRed, idBounds( idVec3( -4,-4,-4 ),idVec3( 4,4,4 ) ), waypoint_origin );
+		gameRenderWorld->DrawText( waypoint->name.c_str(), waypoint_origin + idVec3( 0,0,16 ), 0.25f, colorYellow, gameLocal.GetLocalPlayer()->viewAxis );
+		gameRenderWorld->DebugArrow( colorWhite, vehicle_origin, waypoint_origin, 12.f );
+	}
+
+	// Set the final steerAngle for the vehicle
+	steerAngle = currentSteering;
+
+	idAFEntity_VehicleSixWheels::Think();
+}
 
 /*
 ===============================================================================
 
-  idAFEntity_SteamPipe
+	idAFEntity_SteamPipe
 
 ===============================================================================
 */
 
 CLASS_DECLARATION( idAFEntity_Base, idAFEntity_SteamPipe )
 END_CLASS
-
 
 /*
 ================
@@ -2314,9 +2794,7 @@ void idAFEntity_SteamPipe::Spawn( void ) {
 	const char *steamBodyName;
 
 	LoadAF();
-
 	SetCombatModel();
-
 	SetPhysics( af.GetPhysics() );
 
 	fl.takedamage = true;
@@ -2340,18 +2818,19 @@ idAFEntity_SteamPipe::InitSteamRenderEntity
 ================
 */
 void idAFEntity_SteamPipe::InitSteamRenderEntity( void ) {
-	const char	*temp;
+	const char *temp;
 	const idDeclModelDef *modelDef;
 
 	memset( &steamRenderEntity, 0, sizeof( steamRenderEntity ) );
 	steamRenderEntity.shaderParms[ SHADERPARM_RED ]		= 1.0f;
 	steamRenderEntity.shaderParms[ SHADERPARM_GREEN ]	= 1.0f;
 	steamRenderEntity.shaderParms[ SHADERPARM_BLUE ]	= 1.0f;
+
 	modelDef = NULL;
 	temp = spawnArgs.GetString ( "model_steam" );
 	if ( *temp != '\0' ) {
 		if ( !strstr( temp, "." ) ) {
-			modelDef = static_cast<const idDeclModelDef *>( declManager->FindType( DECL_MODELDEF, temp, false ) );
+			modelDef = static_cast<const idDeclModelDef*>( declManager->FindType( DECL_MODELDEF, temp, false ) );
 			if ( modelDef ) {
 				steamRenderEntity.hModel = modelDef->ModelHandle();
 			}
@@ -2386,7 +2865,6 @@ void idAFEntity_SteamPipe::Think( void ) {
 		steamDir.z = steamUpForce;
 		force.SetForce( steamDir );
 		force.Evaluate( gameLocal.time );
-		//gameRenderWorld->DebugArrow( colorWhite, af.GetPhysics()->GetOrigin( steamBody ), af.GetPhysics()->GetOrigin( steamBody ) - 10.0f * steamDir, 4 );
 	}
 
 	if ( steamModelDefHandle >= 0 ){
@@ -2398,11 +2876,10 @@ void idAFEntity_SteamPipe::Think( void ) {
 	idAFEntity_Base::Think();
 }
 
-
 /*
 ===============================================================================
 
-  idAFEntity_ClawFourFingers
+	idAFEntity_ClawFourFingers
 
 ===============================================================================
 */
@@ -2453,7 +2930,7 @@ void idAFEntity_ClawFourFingers::Restore( idRestoreGame *savefile ) {
 	int i;
 
 	for ( i = 0; i < 4; i++ ) {
-		fingers[i] = static_cast<idAFConstraint_Hinge *>(af.GetPhysics()->GetConstraint( clawConstraintNames[i] ));
+		fingers[i] = static_cast<idAFConstraint_Hinge*>( af.GetPhysics()->GetConstraint( clawConstraintNames[i] ) );
 		fingers[i]->Restore( savefile );
 	}
 
@@ -2470,7 +2947,6 @@ void idAFEntity_ClawFourFingers::Spawn( void ) {
 	int i;
 
 	LoadAF();
-
 	SetCombatModel();
 
 	af.GetPhysics()->LockWorldConstraints( true );
@@ -2480,7 +2956,7 @@ void idAFEntity_ClawFourFingers::Spawn( void ) {
 	fl.takedamage = true;
 
 	for ( i = 0; i < 4; i++ ) {
-		fingers[i] = static_cast<idAFConstraint_Hinge *>(af.GetPhysics()->GetConstraint( clawConstraintNames[i] ));
+		fingers[i] = static_cast<idAFConstraint_Hinge*>( af.GetPhysics()->GetConstraint( clawConstraintNames[i] ) );
 		if ( !fingers[i] ) {
 			gameLocal.Error( "idClaw_FourFingers '%s': can't find claw constraint '%s'", name.c_str(), clawConstraintNames[i] );
 		}
@@ -2515,15 +2991,13 @@ void idAFEntity_ClawFourFingers::Event_StopFingers( void ) {
 	}
 }
 
-
 /*
 ===============================================================================
 
-  editor support routines
+	Editor Support Routines
 
 ===============================================================================
 */
-
 
 /*
 ================
@@ -2543,7 +3017,7 @@ bool idGameEdit::AF_SpawnEntity( const char *fileName ) {
 		return false;
 	}
 
-	af = static_cast<const idDeclAF *>( declManager->FindType( DECL_AF, fileName ) );
+	af = static_cast<const idDeclAF*>( declManager->FindType( DECL_AF, fileName ) );
 	if ( !af ) {
 		return false;
 	}
@@ -2563,7 +3037,8 @@ bool idGameEdit::AF_SpawnEntity( const char *fileName ) {
 	}
 	args.Set( "articulatedFigure", fileName );
 	args.Set( "nodrop", "1" );
-	ent = static_cast<idAFEntity_Generic *>(gameLocal.SpawnEntityType( idAFEntity_Generic::Type, &args));
+
+	ent = static_cast<idAFEntity_Generic*>( gameLocal.SpawnEntityType( idAFEntity_Generic::Type, &args ) );
 
 	// always update this entity
 	ent->BecomeActive( TH_THINK );
@@ -2589,9 +3064,9 @@ void idGameEdit::AF_UpdateEntities( const char *fileName ) {
 	name.StripFileExtension();
 
 	// reload any idAFEntity_Generic which uses the given articulated figure file
-	for( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
+	for ( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
 		if ( ent->IsType( idAFEntity_Base::Type ) ) {
-			af = static_cast<idAFEntity_Base *>(ent);
+			af = static_cast<idAFEntity_Base*>( ent );
 			if ( name.Icmp( af->GetAFName() ) == 0 ) {
 				af->LoadAF();
 				af->GetAFPhysics()->PutToRest();
@@ -2613,7 +3088,7 @@ void idGameEdit::AF_UndoChanges( void ) {
 
 	c = declManager->GetNumDecls( DECL_AF );
 	for ( i = 0; i < c; i++ ) {
-		decl = static_cast<idDeclAF *>( const_cast<idDecl *>( declManager->DeclByIndex( DECL_AF, i, false ) ) );
+		decl = static_cast<idDeclAF*>( const_cast<idDecl*>( declManager->DeclByIndex( DECL_AF, i, false ) ) );
 		if ( !decl->modified ) {
 			continue;
 		}
@@ -2622,9 +3097,9 @@ void idGameEdit::AF_UndoChanges( void ) {
 		declManager->FindType( DECL_AF, decl->GetName() );
 
 		// reload all AF entities using the file
-		for( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
+		for ( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
 			if ( ent->IsType( idAFEntity_Base::Type ) ) {
-				af = static_cast<idAFEntity_Base *>(ent);
+				af = static_cast<idAFEntity_Base*>( ent );
 				if ( idStr::Icmp( decl->GetName(), af->GetAFName() ) == 0 ) {
 					af->LoadAF();
 				}
@@ -2639,22 +3114,24 @@ GetJointTransform
 ================
 */
 typedef struct {
-	renderEntity_t *ent;
+	renderEntity_t	 *ent;
 	const idMD5Joint *joints;
 } jointTransformData_t;
 
 static bool GetJointTransform( void *model, const idJointMat *frame, const char *jointName, idVec3 &origin, idMat3 &axis ) {
 	int i;
-	jointTransformData_t *data = reinterpret_cast<jointTransformData_t *>(model);
+	jointTransformData_t *data = reinterpret_cast<jointTransformData_t*>( model );
 
 	for ( i = 0; i < data->ent->numJoints; i++ ) {
 		if ( data->joints[i].name.Icmp( jointName ) == 0 ) {
 			break;
 		}
 	}
+
 	if ( i >= data->ent->numJoints ) {
 		return false;
 	}
+
 	origin = frame[i].ToVec3();
 	axis = frame[i].ToMat3();
 	return true;
@@ -2682,25 +3159,25 @@ idGameEdit::AF_CreateMesh
 */
 idRenderModel *idGameEdit::AF_CreateMesh( const idDict &args, idVec3 &meshOrigin, idMat3 &meshAxis, bool &poseIsSet ) {
 	int i, jointNum;
-	const idDeclAF *af;
-	const idDeclAF_Body *fb;
+	const idDeclAF *af = NULL;
+	const idDeclAF_Body *fb = NULL;
 	renderEntity_t ent;
-	idVec3 origin, *bodyOrigin, *newBodyOrigin, *modifiedOrigin;
-	idMat3 axis, *bodyAxis, *newBodyAxis, *modifiedAxis;
-	declAFJointMod_t *jointMod;
+	idVec3 origin, *bodyOrigin = NULL, *newBodyOrigin = NULL, *modifiedOrigin = NULL;
+	idMat3 axis, *bodyAxis = NULL, *newBodyAxis = NULL, *modifiedAxis = NULL;
+	declAFJointMod_t *jointMod = NULL;
 	idAngles angles;
-	const idDict *defArgs;
-	const idKeyValue *arg;
+	const idDict *defArgs = NULL;
+	const idKeyValue *arg = NULL;
 	idStr name;
 	jointTransformData_t data;
-	const char *classname, *afName, *modelName;
-	idRenderModel *md5;
-	const idDeclModelDef *modelDef;
-	const idMD5Anim *MD5anim;
-	const idMD5Joint *MD5joint;
-	const idMD5Joint *MD5joints;
+	const char *classname = NULL, *afName = NULL, *modelName = NULL;
+	idRenderModel *md5 = NULL;
+	const idDeclModelDef *modelDef = NULL;
+	const idMD5Anim *MD5anim = NULL;
+	const idMD5Joint *MD5joint = NULL;
+	const idMD5Joint *MD5joints = NULL;
 	int numMD5joints;
-	idJointMat *originalJoints;
+	idJointMat *originalJoints = NULL;
 	int parentNum;
 
 	poseIsSet = false;
@@ -2710,16 +3187,20 @@ idRenderModel *idGameEdit::AF_CreateMesh( const idDict &args, idVec3 &meshOrigin
 	classname = args.GetString( "classname" );
 	defArgs = gameLocal.FindEntityDefDict( classname );
 
+	if ( !defArgs ) {
+		gameLocal.Error( "Unknown classname '%s'", classname );
+	}
+
 	// get the articulated figure
 	afName = GetArgString( args, defArgs, "articulatedFigure" );
-	af = static_cast<const idDeclAF *>( declManager->FindType( DECL_AF, afName ) );
+	af = static_cast<const idDeclAF*>( declManager->FindType( DECL_AF, afName ) );
 	if ( !af ) {
 		return NULL;
 	}
 
 	// get the md5 model
 	modelName = GetArgString( args, defArgs, "model" );
-	modelDef = static_cast< const idDeclModelDef *>( declManager->FindType( DECL_MODELDEF, modelName, false ) );
+	modelDef = static_cast<const idDeclModelDef*>( declManager->FindType( DECL_MODELDEF, modelName, false ) );
 	if ( !modelDef ) {
 		return NULL;
 	}
@@ -2753,16 +3234,16 @@ idRenderModel *idGameEdit::AF_CreateMesh( const idDict &args, idVec3 &meshOrigin
 	ent.customSkin = modelDef->GetSkin();
 	ent.bounds.Clear();
 	ent.numJoints = numMD5joints;
-	ent.joints = ( idJointMat * )_alloca16( ent.numJoints * sizeof( *ent.joints ) );
+	ent.joints = ( idJointMat* )_alloca16( ent.numJoints * sizeof( *ent.joints ) );
 
 	// create animation from of the af_pose
 	ANIM_CreateAnimFrame( md5, MD5anim, ent.numJoints, ent.joints, 1, modelDef->GetVisualOffset(), false );
 
 	// buffers to store the initial origin and axis for each body
-	bodyOrigin = (idVec3 *) _alloca16( af->bodies.Num() * sizeof( idVec3 ) );
-	bodyAxis = (idMat3 *) _alloca16( af->bodies.Num() * sizeof( idMat3 ) );
-	newBodyOrigin = (idVec3 *) _alloca16( af->bodies.Num() * sizeof( idVec3 ) );
-	newBodyAxis = (idMat3 *) _alloca16( af->bodies.Num() * sizeof( idMat3 ) );
+	bodyOrigin = ( idVec3* ) _alloca16( af->bodies.Num() * sizeof( idVec3 ) );
+	bodyAxis = ( idMat3* ) _alloca16( af->bodies.Num() * sizeof( idMat3 ) );
+	newBodyOrigin = ( idVec3* ) _alloca16( af->bodies.Num() * sizeof( idVec3 ) );
+	newBodyAxis = ( idMat3* ) _alloca16( af->bodies.Num() * sizeof( idMat3 ) );
 
 	// finish the AF positions
 	data.ent = &ent;
@@ -2802,7 +3283,7 @@ idRenderModel *idGameEdit::AF_CreateMesh( const idDict &args, idVec3 &meshOrigin
 		}
 		sscanf( arg->GetValue(), "%f %f %f %f %f %f", &origin.x, &origin.y, &origin.z, &angles.pitch, &angles.yaw, &angles.roll );
 
-		if ( fb->jointName.Icmp( "origin" ) == 0 ) {
+		if ( fb != NULL && fb->jointName.Icmp( "origin" ) == 0 ) {
 			meshAxis = bodyAxis[i].Transpose() * angles.ToMat3();
 			meshOrigin = origin - bodyOrigin[i] * meshAxis;
 			poseIsSet = true;
@@ -2813,15 +3294,15 @@ idRenderModel *idGameEdit::AF_CreateMesh( const idDict &args, idVec3 &meshOrigin
 	}
 
 	// save the original joints
-	originalJoints = ( idJointMat * )_alloca16( numMD5joints * sizeof( originalJoints[0] ) );
+	originalJoints = ( idJointMat* )_alloca16( numMD5joints * sizeof( originalJoints[0] ) );
 	memcpy( originalJoints, ent.joints, numMD5joints * sizeof( originalJoints[0] ) );
 
 	// buffer to store the joint mods
-	jointMod = (declAFJointMod_t *) _alloca16( numMD5joints * sizeof( declAFJointMod_t ) );
+	jointMod = ( declAFJointMod_t* ) _alloca16( numMD5joints * sizeof( declAFJointMod_t ) );
 	memset( jointMod, -1, numMD5joints * sizeof( declAFJointMod_t ) );
-	modifiedOrigin = (idVec3 *) _alloca16( numMD5joints * sizeof( idVec3 ) );
+	modifiedOrigin = ( idVec3* ) _alloca16( numMD5joints * sizeof( idVec3 ) );
 	memset( modifiedOrigin, 0, numMD5joints * sizeof( idVec3 ) );
-	modifiedAxis = (idMat3 *) _alloca16( numMD5joints * sizeof( idMat3 ) );
+	modifiedAxis = ( idMat3* ) _alloca16( numMD5joints * sizeof( idMat3 ) );
 	memset( modifiedAxis, 0, numMD5joints * sizeof( idMat3 ) );
 
 	// get all the joint modifications
@@ -2848,7 +3329,7 @@ idRenderModel *idGameEdit::AF_CreateMesh( const idDict &args, idVec3 &meshOrigin
 
 	// apply joint modifications to the skeleton
 	MD5joint = MD5joints + 1;
-	for( i = 1; i < numMD5joints; i++, MD5joint++ ) {
+	for ( i = 1; i < numMD5joints; i++, MD5joint++ ) {
 
 		parentNum = MD5joint->parent - MD5joints;
 		idMat3 parentAxis = originalJoints[ parentNum ].ToMat3();
@@ -2881,4 +3362,558 @@ idRenderModel *idGameEdit::AF_CreateMesh( const idDict &args, idVec3 &meshOrigin
 
 	// instantiate a mesh using the joint information from the render entity
 	return md5->InstantiateDynamicModel( &ent, NULL, NULL );
+}
+
+/*
+===============================================================================
+
+	idHarvestable
+
+===============================================================================
+*/
+
+const idEventDef EV_Harvest_SpawnHarvestTrigger( "<spawnHarvestTrigger>", NULL );
+
+CLASS_DECLARATION( idEntity, idHarvestable )
+EVENT( EV_Harvest_SpawnHarvestTrigger,	idHarvestable::Event_SpawnHarvestTrigger )
+EVENT( EV_Touch,						idHarvestable::Event_Touch )
+END_CLASS
+
+/*
+================
+idHarvestable::idHarvestable
+================
+*/
+idHarvestable::idHarvestable() {
+	trigger = NULL;
+	parentEnt = NULL;
+}
+
+/*
+================
+idHarvestable::~idHarvestable
+================
+*/
+idHarvestable::~idHarvestable() {
+	if ( trigger ) {
+		delete trigger;
+		trigger = NULL;
+	}
+}
+
+/*
+================
+idHarvestable::Spawn
+================
+*/
+void idHarvestable::Spawn() {
+	startTime = 0;
+
+	spawnArgs.GetFloat( "triggersize", "120", triggersize );
+	spawnArgs.GetFloat( "give_delay", "3", giveDelay );
+	giveDelay *= 1000;
+	given = false;
+
+	removeDelay = spawnArgs.GetFloat( "remove_delay" ) * 1000.0f;
+
+	fxFollowPlayer = spawnArgs.GetBool( "fx_follow_player", "1" );
+	fxOrient = spawnArgs.GetString( "fx_orient" );
+}
+
+/*
+================
+idHarvestable::Init
+================
+*/
+void idHarvestable::Init( idEntity *parent ) {
+	assert( parent );
+
+	parentEnt = parent;
+
+	GetPhysics()->SetOrigin( parent->GetPhysics()->GetOrigin() );
+	this->Bind( parent, true );
+
+	// Set the skin of the entity to the harvest skin
+	idStr skin = parent->spawnArgs.GetString( "skin_harvest", "" );
+	if ( skin.Length() ) {
+		parent->SetSkin( declManager->FindSkin( skin.c_str() ) );
+	}
+
+	idEntity *head = NULL;
+	if ( parent->IsType( idActor::Type ) ) {
+		idActor *withHead = ( idActor* )parent;
+		head = withHead->GetHeadEntity();
+	}
+	if ( parent->IsType( idAFEntity_WithAttachedHead::Type ) ) {
+		idAFEntity_WithAttachedHead *withHead = ( idAFEntity_WithAttachedHead* )parent;
+		head = withHead->head.GetEntity();
+	}
+	if ( head ) {
+		idStr headskin = parent->spawnArgs.GetString( "skin_harvest_head", "" );
+		if ( headskin.Length() ) {
+			head->SetSkin( declManager->FindSkin( headskin.c_str() ) );
+		}
+	}
+
+	idStr sound = parent->spawnArgs.GetString( "harvest_sound" );
+	if ( sound.Length() > 0 ) {
+		 parent->StartSound( sound.c_str(), SND_CHANNEL_ANY, 0, false, NULL );
+	}
+
+	PostEventMS( &EV_Harvest_SpawnHarvestTrigger, 0 );
+}
+
+/*
+================
+idHarvestable::Save
+================
+*/
+void idHarvestable::Save( idSaveGame *savefile ) const {
+	savefile->WriteFloat( triggersize );
+	savefile->WriteClipModel( trigger );
+	savefile->WriteFloat( giveDelay );
+	savefile->WriteFloat( removeDelay );
+	savefile->WriteBool( given );
+
+	player.Save( savefile );
+	savefile->WriteInt( startTime );
+
+	savefile->WriteBool( fxFollowPlayer );
+	fx.Save( savefile );
+	savefile->WriteString( fxOrient );
+
+	parentEnt.Save( savefile );
+}
+
+/*
+================
+idHarvestable::Restore
+================
+*/
+void idHarvestable::Restore( idRestoreGame *savefile ) {
+	savefile->ReadFloat( triggersize );
+	savefile->ReadClipModel( trigger );
+	savefile->ReadFloat( giveDelay );
+	savefile->ReadFloat( removeDelay );
+	savefile->ReadBool( given );
+
+	player.Restore( savefile );
+	savefile->ReadInt( startTime );
+
+	savefile->ReadBool( fxFollowPlayer );
+	fx.Restore( savefile );
+	savefile->ReadString( fxOrient );
+
+	parentEnt.Restore( savefile );
+}
+
+/*
+================
+idHarvestable::SetParent
+================
+*/
+void idHarvestable::SetParent( idEntity *parent ) {
+	parentEnt = parent;
+}
+
+/*
+================
+idHarvestable::Think
+================
+*/
+void idHarvestable::Think() {
+	idEntity *parent = parentEnt.GetEntity();
+	if ( !parent ) {
+		return;
+	}
+
+	// Update the orientation of the box
+	if ( trigger && parent && !parent->GetPhysics()->IsAtRest() ) {
+		trigger->Link( gameLocal.clip, this, 0, parent->GetPhysics()->GetOrigin(), parent->GetPhysics()->GetAxis() );
+	}
+
+	if ( startTime && gameLocal.slow.time - startTime > giveDelay && ! given ) {
+		idPlayer *thePlayer = player.GetEntity();
+		thePlayer->Give( spawnArgs.GetString( "give_item" ), spawnArgs.GetString( "give_value" ) );
+		thePlayer->harvest_lock = false;
+		given = true;
+	}
+
+	if ( startTime && gameLocal.slow.time - startTime > removeDelay ) {
+		parent->PostEventMS( &EV_Remove, 0 );
+		PostEventMS( &EV_Remove, 0 );
+	}
+
+	if ( fxFollowPlayer ) {
+		idEntityFx *fxEnt = fx.GetEntity();
+		if ( fxEnt ) {
+			idMat3 orientAxisLocal;
+			if ( GetFxOrientationAxis( orientAxisLocal ) ) {
+				fxEnt->GetPhysics()->SetAxis( orientAxisLocal );
+			}
+		}
+	}
+}
+
+/*
+================
+idHarvestable::Gib
+
+Called when the parent object has been gibbed.
+================
+*/
+void idHarvestable::Gib() {
+	// Stop any looping sound that was playing
+	idEntity *parent = parentEnt.GetEntity();
+	if ( parent ) {
+		idStr sound = parent->spawnArgs.GetString( "harvest_sound" );
+		if ( sound.Length() > 0 ) {
+			parent->StopSound( SND_CHANNEL_ANY, false );
+		}
+	}
+}
+
+/*
+================
+idHarvestable::BeginBurn
+================
+*/
+void idHarvestable::BeginBurn() {
+	idEntity *parent = parentEnt.GetEntity();
+	if ( !parent ) {
+		return;
+	}
+
+	if ( !spawnArgs.GetBool( "burn" ) ) {
+		return;
+	}
+
+	// Switch Skins if the parent would like us to.
+	idStr skin = parent->spawnArgs.GetString( "skin_harvest_burn", "" );
+	if ( skin.Length() ) {
+		parent->SetSkin( declManager->FindSkin( skin.c_str() ) );
+	}
+	parent->GetRenderEntity()->noShadow = true;
+	parent->SetShaderParm( SHADERPARM_TIME_OF_DEATH, gameLocal.slow.time * 0.001f );
+
+	idEntity *head = NULL;
+	if ( parent->IsType( idActor::Type ) ) {
+		idActor *withHead = ( idActor* )parent;
+		head = withHead->GetHeadEntity();
+	}
+	if ( parent->IsType( idAFEntity_WithAttachedHead::Type ) ) {
+		idAFEntity_WithAttachedHead *withHead = ( idAFEntity_WithAttachedHead* )parent;
+		head = withHead->head.GetEntity();
+	}
+	if ( head ) {
+		idStr headskin = parent->spawnArgs.GetString( "skin_harvest_burn_head", "" );
+		if ( headskin.Length() ) {
+			head->SetSkin( declManager->FindSkin( headskin.c_str() ) );
+		}
+
+		head->GetRenderEntity()->noShadow = true;
+		head->SetShaderParm( SHADERPARM_TIME_OF_DEATH, gameLocal.slow.time * 0.001f );
+	}
+}
+
+/*
+================
+idHarvestable:BeginFX
+================
+*/
+void idHarvestable::BeginFX() {
+	if ( strlen( spawnArgs.GetString( "fx" ) ) <= 0 ) {
+		return;
+	}
+
+	idMat3 *orientAxis = NULL;
+	idMat3 orientAxisLocal;
+
+	if ( GetFxOrientationAxis( orientAxisLocal ) ) {
+		orientAxis = &orientAxisLocal;
+	}
+
+	fx = idEntityFx::StartFx( spawnArgs.GetString( "fx" ), NULL, orientAxis, this, spawnArgs.GetBool( "fx_bind" ) );
+}
+
+/*
+================
+idHarvestable::CalcTriggerBounds
+================
+*/
+void idHarvestable::CalcTriggerBounds( float size, idBounds &bounds ) {
+	idEntity *parent = parentEnt.GetEntity();
+	if ( !parent ) {
+		return;
+	}
+
+	//Simple trigger bounds is the absolute bounds of the AF plus a defined size
+	bounds = parent->GetPhysics()->GetAbsBounds();
+	bounds.ExpandSelf( size );
+	bounds[0] -= parent->GetPhysics()->GetOrigin();
+	bounds[1] -= parent->GetPhysics()->GetOrigin();
+}
+
+/*
+================
+idHarvestable::GetFxOrientationAxis
+================
+*/
+bool idHarvestable::GetFxOrientationAxis( idMat3 &mat ) {
+	idEntity *parent = parentEnt.GetEntity();
+	if ( !parent ) {
+		return false;
+	}
+
+	idPlayer *thePlayer = player.GetEntity();
+	if ( !fxOrient.Icmp( "up" ) ) {
+		//Orient up
+		idVec3 grav = parent->GetPhysics()->GetGravityNormal()*-1;
+		idVec3 left, up;
+
+		grav.OrthogonalBasis( left, up );
+		idMat3 temp( left.x, left.y, left.z, up.x, up.y, up.z, grav.x, grav.y, grav.z );
+		mat = temp;
+
+		return true;
+
+	} else if ( !fxOrient.Icmp( "weapon" ) ) {
+		//Orient the fx towards the muzzle of the weapon
+		jointHandle_t	joint;
+		idVec3	joint_origin;
+		idMat3	joint_axis;
+		joint = thePlayer->weapon.GetEntity()->GetAnimator()->GetJointHandle( spawnArgs.GetString( "fx_weapon_joint" ) );
+		if ( joint != INVALID_JOINT ) {
+			thePlayer->weapon.GetEntity()->GetJointWorldTransform( joint, gameLocal.slow.time, joint_origin, joint_axis );
+		} else {
+			joint_origin = thePlayer->GetPhysics()->GetOrigin();
+		}
+
+		idVec3 toPlayer = joint_origin-parent->GetPhysics()->GetOrigin();
+		toPlayer.NormalizeFast();
+
+		idVec3 left, up;
+		toPlayer.OrthogonalBasis( left, up );
+		idMat3 temp( left.x, left.y, left.z, up.x, up.y, up.z, toPlayer.x, toPlayer.y, toPlayer.z );
+		mat = temp;
+
+		return true;
+
+	} else if ( !fxOrient.Icmp( "player" ) ) {
+		//Orient the fx towards the eye of the player
+		idVec3 eye = thePlayer->GetEyePosition();
+		idVec3 toPlayer = eye-parent->GetPhysics()->GetOrigin();
+
+		toPlayer.Normalize();
+
+		idVec3 left, up;
+		up.Set( 0, 1, 0 );
+		left = toPlayer.Cross( up );
+		up = left.Cross( toPlayer );
+
+		idMat3 temp( left.x, left.y, left.z, up.x, up.y, up.z, toPlayer.x, toPlayer.y, toPlayer.z );
+
+		mat = temp;
+
+		return true;
+	}
+
+	// Returning false indicates that the orientation is not used;
+	return false;
+}
+
+/*
+================
+idHarvestable::Event_SpawnHarvestTrigger
+================
+*/
+void idHarvestable::Event_SpawnHarvestTrigger( void ) {
+	idEntity *parent = parentEnt.GetEntity();
+	if ( !parent ) {
+		return;
+	}
+
+	idBounds bounds;
+	CalcTriggerBounds( triggersize, bounds );
+
+	// create a trigger clip model
+	trigger = new idClipModel( idTraceModel( bounds ) );
+	trigger->Link( gameLocal.clip, this, 255, parent->GetPhysics()->GetOrigin(), mat3_identity );
+	trigger->SetContents( CONTENTS_TRIGGER );
+
+	startTime = 0;
+}
+
+/*
+================
+idHarvestable::Event_Touch
+================
+*/
+void idHarvestable::Event_Touch( idEntity *other, trace_t *trace ) {
+	idEntity *parent = parentEnt.GetEntity();
+	if ( !parent ) {
+		return;
+	}
+
+	if ( parent->IsType( idAFEntity_Gibbable::Type ) ) {
+		idAFEntity_Gibbable *gibParent = ( idAFEntity_Gibbable* )parent;
+		if ( gibParent->IsGibbed() ) {
+			return;
+		}
+	}
+
+	if ( !startTime && other && other->IsType( idPlayer::Type ) ) {
+		idPlayer *thePlayer = static_cast<idPlayer*>( other );
+
+		if ( thePlayer->harvest_lock ) {
+			// Don't harvest if the player is in mid harvest
+			return;
+		}
+
+		player = thePlayer;
+
+		bool okToGive = true;
+		idStr requiredWeapons = spawnArgs.GetString( "required_weapons" );
+
+		if ( requiredWeapons.Length() > 0 ) {
+			idStr playerWeap = thePlayer->GetCurrentWeapon();
+			if ( playerWeap.Length() == 0 || requiredWeapons.Find( playerWeap, false ) == -1 ) {
+				okToGive = false;
+			}
+		}
+
+		if ( okToGive ) {
+			if ( thePlayer->CanGive( spawnArgs.GetString( "give_item" ), spawnArgs.GetString( "give_value" ) ) ) {
+
+				startTime = gameLocal.slow.time;
+
+				//Lock the player from harvesting to prevent multiple harvests when only one is needed
+				thePlayer->harvest_lock = true;
+
+				idWeapon *weap = ( idWeapon* )thePlayer->weapon.GetEntity();
+				if ( weap ) {
+					weap->ProcessEvent( &EV_Weapon_State, "Charge", 8) ;
+				}
+
+				BeginBurn();
+				BeginFX();
+
+				//Stop any looping sound that was playing
+				idStr sound = parent->spawnArgs.GetString( "harvest_sound" );
+				if ( sound.Length() > 0 ) {
+					parent->StopSound( SND_CHANNEL_ANY, false );
+				}
+
+				//Make the parent object non-solid
+				parent->GetPhysics()->SetContents( 0 );
+				parent->GetPhysics()->GetClipModel()->Unlink();
+
+				//Turn of the trigger so it doesn't process twice
+				trigger->SetContents( 0 );
+			}
+		}
+	}
+}
+
+/*
+===============================================================================
+
+	idAFEntity_Harvest
+
+===============================================================================
+*/
+
+const idEventDef EV_Harvest_SpawnHarvestEntity( "<spawnHarvestEntity>", NULL );
+
+CLASS_DECLARATION( idAFEntity_WithAttachedHead, idAFEntity_Harvest )
+EVENT( EV_Harvest_SpawnHarvestEntity,	idAFEntity_Harvest::Event_SpawnHarvestEntity )
+END_CLASS
+
+/*
+================
+idAFEntity_Harvest::idAFEntity_Harvest
+================
+*/
+idAFEntity_Harvest::idAFEntity_Harvest() {
+	harvestEnt = NULL;
+}
+
+/*
+================
+idAFEntity_Harvest::~idAFEntity_Harvest
+================
+*/
+idAFEntity_Harvest::~idAFEntity_Harvest() {
+	if ( harvestEnt.GetEntity() ) {
+		harvestEnt.GetEntity()->PostEventMS( &EV_Remove, 0 );
+	}
+}
+
+/*
+================
+idAFEntity_Harvest::Save
+================
+*/
+void idAFEntity_Harvest::Save( idSaveGame *savefile ) const {
+	harvestEnt.Save( savefile );
+}
+
+/*
+================
+idAFEntity_Harvest::Restore
+================
+*/
+void idAFEntity_Harvest::Restore( idRestoreGame *savefile ) {
+	harvestEnt.Restore( savefile );
+}
+
+/*
+================
+idAFEntity_Harvest::Spawn
+================
+*/
+void idAFEntity_Harvest::Spawn( void ) {
+	PostEventMS( &EV_Harvest_SpawnHarvestEntity, 0 );
+}
+
+/*
+================
+idAFEntity_Harvest::Think
+================
+*/
+void idAFEntity_Harvest::Think( void ) {
+	idAFEntity_WithAttachedHead::Think();
+}
+
+/*
+================
+idAFEntity_Harvest::Event_SpawnHarvestEntity
+================
+*/
+void idAFEntity_Harvest::Event_SpawnHarvestEntity( void ) {
+	const idDict *harvestDef = gameLocal.FindEntityDefDict( spawnArgs.GetString( "def_harvest_type" ), false );
+	if ( harvestDef ) {
+		idEntity *temp;
+		gameLocal.SpawnEntityDef( *harvestDef, &temp, false );
+		harvestEnt = static_cast<idHarvestable*>( temp );
+	}
+
+	if ( harvestEnt.GetEntity() ) {
+		//Let the harvest entity set itself up
+		harvestEnt.GetEntity()->Init( this );
+		harvestEnt.GetEntity()->BecomeActive( TH_THINK );
+	}
+}
+
+/*
+================
+idAFEntity_Harvest::Gib
+================
+*/
+void idAFEntity_Harvest::Gib( const idVec3 &dir, const char *damageDefName ) {
+	if ( harvestEnt.GetEntity() ) {
+		//Let the harvest ent know that we gibbed
+		harvestEnt.GetEntity()->Gib();
+	}
+	idAFEntity_WithAttachedHead::Gib( dir, damageDefName );
 }

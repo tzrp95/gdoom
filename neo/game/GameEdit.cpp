@@ -27,6 +27,7 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 #include "sys/platform.h"
+
 #include "gamesys/SysCvar.h"
 #include "physics/Physics_Monster.h"
 #include "ai/AI.h"
@@ -104,7 +105,6 @@ void idCursor3D::Think( void ) {
 	Present();
 }
 
-
 /*
 ===============================================================================
 
@@ -137,13 +137,13 @@ idDragEntity::~idDragEntity( void ) {
 	cursor = NULL;
 }
 
-
 /*
 ==============
 idDragEntity::Clear
 ==============
 */
 void idDragEntity::Clear() {
+	StopDrag();
 	dragEnt			= NULL;
 	joint			= INVALID_JOINT;
 	id				= 0;
@@ -174,9 +174,9 @@ void idDragEntity::Update( idPlayer *player ) {
 	idVec3 viewPoint, origin;
 	idMat3 viewAxis, axis;
 	trace_t trace;
-	idEntity *newEnt;
+	idEntity *newEnt = NULL;
 	idAngles angles;
-	jointHandle_t newJoint;
+	jointHandle_t newJoint = INVALID_JOINT;
 	idStr newBodyName;
 
 	player->GetViewPos( viewPoint, viewAxis );
@@ -186,7 +186,7 @@ void idDragEntity::Update( idPlayer *player ) {
 
 		if ( player->usercmd.buttons & BUTTON_ATTACK ) {
 
-			gameLocal.clip.TracePoint( trace, viewPoint, viewPoint + viewAxis[0] * MAX_DRAG_TRACE_DISTANCE, (CONTENTS_SOLID|CONTENTS_RENDERMODEL|CONTENTS_BODY), player );
+			gameLocal.clip.TracePoint( trace, viewPoint, viewPoint + viewAxis[0] * MAX_DRAG_TRACE_DISTANCE, ( CONTENTS_SOLID | CONTENTS_RENDERMODEL | CONTENTS_BODY ), player );
 			if ( trace.fraction < 1.0f ) {
 
 				newEnt = gameLocal.entities[ trace.c.entityNum ];
@@ -201,8 +201,8 @@ void idDragEntity::Update( idPlayer *player ) {
 						newEnt = newEnt->GetBindMaster();
 					}
 
-					if ( newEnt->IsType( idAFEntity_Base::Type ) && static_cast<idAFEntity_Base *>(newEnt)->IsActiveAF() ) {
-						idAFEntity_Base *af = static_cast<idAFEntity_Base *>(newEnt);
+					if ( newEnt->IsType( idAFEntity_Base::Type ) && static_cast<idAFEntity_Base*>( newEnt )->IsActiveAF() ) {
+						idAFEntity_Base *af = static_cast<idAFEntity_Base*>( newEnt );
 
 						// joint being dragged
 						newJoint = CLIPMODEL_ID_TO_JOINT_HANDLE( trace.c.id );
@@ -226,6 +226,7 @@ void idDragEntity::Update( idPlayer *player ) {
 						newEnt = NULL;
 					}
 				}
+
 				if ( newEnt ) {
 					dragEnt = newEnt;
 					selected = newEnt;
@@ -233,8 +234,8 @@ void idDragEntity::Update( idPlayer *player ) {
 					id = trace.c.id;
 					bodyName = newBodyName;
 
-					if ( !cursor ) {
-						cursor = ( idCursor3D * )gameLocal.SpawnEntityType( idCursor3D::Type );
+					if ( cursor == NULL ) {
+						cursor = ( idCursor3D* )gameLocal.SpawnEntityType( idCursor3D::Type );
 					}
 
 					idPhysics *phys = dragEnt.GetEntity()->GetPhysics();
@@ -274,7 +275,7 @@ void idDragEntity::Update( idPlayer *player ) {
 		renderEntity_t *renderEntity = drag->GetRenderEntity();
 		idAnimator *dragAnimator = drag->GetAnimator();
 
-		if ( joint != INVALID_JOINT && renderEntity && dragAnimator ) {
+		if ( joint != INVALID_JOINT && renderEntity != NULL && dragAnimator != NULL ) {
 			dragAnimator->GetJointTransform( joint, gameLocal.time, cursor->draggedPosition, axis );
 			cursor->draggedPosition = renderEntity->origin + cursor->draggedPosition * renderEntity->axis;
 			gameRenderWorld->DrawText( va( "%s\n%s\n%s, %s", drag->GetName(), drag->GetType()->classname, dragAnimator->GetJointName( joint ), bodyName.c_str() ), cursor->GetPhysics()->GetOrigin(), 0.1f, colorWhite, viewAxis, 1 );
@@ -328,8 +329,7 @@ void idDragEntity::BindSelected( void ) {
 	const idKeyValue *kv;
 	idAFEntity_Base *af;
 
-	af = static_cast<idAFEntity_Base *>(dragEnt.GetEntity());
-
+	af = static_cast<idAFEntity_Base*>( dragEnt.GetEntity() );
 	if ( !af || !af->IsType( idAFEntity_Base::Type ) || !af->IsActiveAF() ) {
 		return;
 	}
@@ -377,11 +377,10 @@ idDragEntity::UnbindSelected
 ==============
 */
 void idDragEntity::UnbindSelected( void ) {
-	const idKeyValue *kv;
-	idAFEntity_Base *af;
+	const idKeyValue	*kv;
+	idAFEntity_Base		*af;
 
-	af = static_cast<idAFEntity_Base *>(selected.GetEntity());
-
+	af = static_cast<idAFEntity_Base*>( selected.GetEntity() );
 	if ( !af || !af->IsType( idAFEntity_Base::Type ) || !af->IsActiveAF() ) {
 		return;
 	}
@@ -401,7 +400,6 @@ void idDragEntity::UnbindSelected( void ) {
 	af->spawnArgs.Delete( "bindToJoint" );
 	af->spawnArgs.Delete( "bindToBody" );
 }
-
 
 /*
 ===============================================================================
@@ -465,9 +463,9 @@ bool idEditEntities::SelectEntity( const idVec3 &origin, const idVec3 &dir, cons
 idEditEntities::AddSelectedEntity
 =============
 */
-void idEditEntities::AddSelectedEntity(idEntity *ent) {
+void idEditEntities::AddSelectedEntity( idEntity *ent ) {
 	ent->fl.selected = true;
-	selectedEntities.AddUnique(ent);
+	selectedEntities.AddUnique( ent );
 }
 
 /*
@@ -495,7 +493,6 @@ void idEditEntities::ClearSelectedEntities() {
 	}
 	selectedEntities.Clear();
 }
-
 
 /*
 =============
@@ -597,7 +594,7 @@ void idEditEntities::DisplayEntities( void ) {
 
 	idStr textKey;
 
-	for( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
+	for ( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
 
 		idVec4 color;
 
@@ -608,14 +605,14 @@ void idEditEntities::DisplayEntities( void ) {
 
 		bool drawArrows = false;
 		if ( ent->GetType() == &idAFEntity_Base::Type ) {
-			if ( !static_cast<idAFEntity_Base *>(ent)->IsActiveAF() ) {
+			if ( !static_cast<idAFEntity_Base*>( ent )->IsActiveAF() ) {
 				continue;
 			}
 		} else if ( ent->GetType() == &idSound::Type ) {
 			if ( ent->fl.selected ) {
 				drawArrows = true;
 			}
-			const idSoundShader * ss = declManager->FindSound( ent->spawnArgs.GetString( textKey ) );
+			const idSoundShader *ss = declManager->FindSound( ent->spawnArgs.GetString( textKey ) );
 			if ( ss->HasDefaultSound() || ss->base->GetState() == DS_DEFAULTED ) {
 				color.Set( 1.0f, 0.0f, 1.0f, 1.0f );
 			}
@@ -655,12 +652,11 @@ void idEditEntities::DisplayEntities( void ) {
 		if ( textKey.Length() ) {
 			const char *text = ent->spawnArgs.GetString( textKey );
 			if ( viewTextBounds.ContainsPoint( ent->GetPhysics()->GetOrigin() ) ) {
-				gameRenderWorld->DrawText( text, ent->GetPhysics()->GetOrigin() + idVec3(0, 0, 12), 0.25, colorWhite, axis, 1 );
+				gameRenderWorld->DrawText( text, ent->GetPhysics()->GetOrigin() + idVec3( 0, 0, 12 ), 0.25, colorWhite, axis, 1 );
 			}
 		}
 	}
 }
-
 
 /*
 ===============================================================================
@@ -671,8 +667,7 @@ void idEditEntities::DisplayEntities( void ) {
 */
 
 idGameEditExt		gameEditLocal;
-idGameEdit *		gameEdit = &gameEditLocal;
-
+idGameEdit			*gameEdit = &gameEditLocal;
 
 /*
 =============
@@ -683,7 +678,7 @@ int idGameEdit::GetSelectedEntities( idEntity *list[], int max ) {
 	int num = 0;
 	idEntity *ent;
 
-	for( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
+	for ( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
 		if ( ent->fl.selected ) {
 			list[num++] = ent;
 			if ( num >= max ) {
@@ -701,7 +696,8 @@ idGameEdit::TriggerSelected
 */
 void idGameEdit::TriggerSelected() {
 	idEntity *ent;
-	for( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
+
+	for ( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
 		if ( ent->fl.selected ) {
 			ent->ProcessEvent( &EV_Activate, gameLocal.GetLocalPlayer() );
 		}
@@ -716,9 +712,14 @@ idGameEdit::ClearEntitySelection
 void idGameEdit::ClearEntitySelection() {
 	idEntity *ent;
 
-	for( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
+	if ( gameLocal.editEntities == NULL ) {
+		return;
+	}
+
+	for ( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
 		ent->fl.selected = false;
 	}
+
 	gameLocal.editEntities->ClearSelectedEntities();
 }
 
@@ -728,6 +729,10 @@ idGameEdit::AddSelectedEntity
 ================
 */
 void idGameEdit::AddSelectedEntity( idEntity *ent ) {
+	if ( gameLocal.editEntities == NULL ) {
+		return;
+	}
+
 	if ( ent ) {
 		gameLocal.editEntities->AddSelectedEntity( ent );
 	}
@@ -764,7 +769,7 @@ idEntity *idGameEdit::FindEntity( const char *name ) const {
 =============
 idGameEdit::GetUniqueEntityName
 
-generates a unique name for a given classname
+Generates a unique name for a given classname
 =============
 */
 const char *idGameEdit::GetUniqueEntityName( const char *classname ) const {
@@ -772,7 +777,7 @@ const char *idGameEdit::GetUniqueEntityName( const char *classname ) const {
 	static char	name[1024];
 
 	// can only have MAX_GENTITIES, so if we have a spot available, we're guaranteed to find one
-	for( id = 0; id < MAX_GENTITIES; id++ ) {
+	for ( id = 0; id < MAX_GENTITIES; id++ ) {
 		idStr::snPrintf( name, sizeof( name ), "%s_%d", classname, id );
 		if ( !gameLocal.FindEntity( name ) ) {
 			return name;
@@ -881,8 +886,8 @@ idGameEdit::EntityChangeSpawnArgs
 void idGameEdit::EntityChangeSpawnArgs( idEntity *ent, const idDict *newArgs ) {
 	if ( ent ) {
 		for ( int i = 0 ; i < newArgs->GetNumKeyVals () ; i ++ ) {
-			const idKeyValue *kv = newArgs->GetKeyVal( i );
 
+			const idKeyValue *kv = newArgs->GetKeyVal( i );
 			if ( kv->GetValue().Length() > 0 ) {
 				ent->spawnArgs.Set ( kv->GetKey() ,kv->GetValue() );
 			} else {
@@ -950,7 +955,9 @@ idGameEdit::PlayerGetOrigin
 ================
 */
 void idGameEdit::PlayerGetOrigin( idVec3 &org ) const {
-	org = gameLocal.GetLocalPlayer()->GetPhysics()->GetOrigin();
+	if ( gameLocal.GetLocalPlayer() != NULL )  {
+		org = gameLocal.GetLocalPlayer()->GetPhysics()->GetOrigin();
+	}
 }
 
 /*
@@ -959,7 +966,9 @@ idGameEdit::PlayerGetAxis
 ================
 */
 void idGameEdit::PlayerGetAxis( idMat3 &axis ) const {
-	axis = gameLocal.GetLocalPlayer()->GetPhysics()->GetAxis();
+	if ( gameLocal.GetLocalPlayer() != NULL )  {
+		axis = gameLocal.GetLocalPlayer()->GetPhysics()->GetAxis();
+	}
 }
 
 /*
@@ -968,7 +977,9 @@ idGameEdit::PlayerGetViewAngles
 ================
 */
 void idGameEdit::PlayerGetViewAngles( idAngles &angles ) const {
-	angles = gameLocal.GetLocalPlayer()->viewAngles;
+	if ( gameLocal.GetLocalPlayer() != NULL )  {
+		angles = gameLocal.GetLocalPlayer()->viewAngles;
+	}	
 }
 
 /*
@@ -977,9 +988,10 @@ idGameEdit::PlayerGetEyePosition
 ================
 */
 void idGameEdit::PlayerGetEyePosition( idVec3 &org ) const {
-	org = gameLocal.GetLocalPlayer()->GetEyePosition();
+	if ( gameLocal.GetLocalPlayer() != NULL )  {
+		org = gameLocal.GetLocalPlayer()->GetEyePosition();
+	}
 }
-
 
 /*
 ================
@@ -1004,8 +1016,8 @@ idGameEdit::MapSave
 */
 void idGameEdit::MapSave( const char *path ) const {
 	idMapFile *mapFile = gameLocal.GetLevelMap();
-	if (mapFile) {
-		mapFile->Write( (path) ? path : mapFile->GetName(), ".map");
+	if ( mapFile != NULL ) {
+		mapFile->Write( ( path ) ? path : mapFile->GetName(), ".map" );
 	}
 }
 
@@ -1038,13 +1050,18 @@ void idGameEdit::MapCopyDictToEntity( const char *name, const idDict *dict ) con
 				const idKeyValue *kv = dict->GetKeyVal( i );
 				const char *key = kv->GetKey();
 				const char *val = kv->GetValue();
-				mapent->epairs.Set( key, val );
+
+				// DG: if val is "", delete key from the entity
+				// => same behavior as EntityChangeSpawnArgs()
+				if ( val[0] == '\0' ) {
+					mapent->epairs.Delete( key ); 
+				} else {
+					mapent->epairs.Set( key, val );
+				}
 			}
 		}
 	}
 }
-
-
 
 /*
 ================
@@ -1054,12 +1071,13 @@ idGameEdit::MapGetUniqueMatchingKeyVals
 int idGameEdit::MapGetUniqueMatchingKeyVals( const char *key, const char *list[], int max ) const {
 	idMapFile *mapFile = gameLocal.GetLevelMap();
 	int count = 0;
+
 	if ( mapFile ) {
 		for ( int i = 0; i < mapFile->GetNumEntities(); i++ ) {
 			idMapEntity *ent = mapFile->GetEntity( i );
 			if ( ent ) {
 				const char *k = ent->epairs.GetString( key );
-				if ( k && *k && count < max ) {
+				if ( k != NULL && *k != '\0' && count < max ) {
 					list[count++] = k;
 				}
 			}
@@ -1075,6 +1093,7 @@ idGameEdit::MapAddEntity
 */
 void idGameEdit::MapAddEntity( const idDict *dict ) const {
 	idMapFile *mapFile = gameLocal.GetLevelMap();
+
 	if ( mapFile ) {
 		idMapEntity *ent = new idMapEntity();
 		ent->epairs = *dict;
@@ -1089,6 +1108,7 @@ idGameEdit::MapRemoveEntity
 */
 void idGameEdit::MapRemoveEntity( const char *name ) const {
 	idMapFile *mapFile = gameLocal.GetLevelMap();
+
 	if ( mapFile ) {
 		idMapEntity *ent = mapFile->FindEntity( name );
 		if ( ent ) {
@@ -1096,7 +1116,6 @@ void idGameEdit::MapRemoveEntity( const char *name ) const {
 		}
 	}
 }
-
 
 /*
 ================
@@ -1106,12 +1125,13 @@ idGameEdit::MapGetEntitiesMatchignClassWithString
 int idGameEdit::MapGetEntitiesMatchingClassWithString( const char *classname, const char *match, const char *list[], const int max ) const {
 	idMapFile *mapFile = gameLocal.GetLevelMap();
 	int count = 0;
+
 	if ( mapFile ) {
 		int entCount = mapFile->GetNumEntities();
 		for ( int i = 0 ; i < entCount; i++ ) {
-			idMapEntity *ent = mapFile->GetEntity(i);
-			if (ent) {
-				idStr work = ent->epairs.GetString("classname");
+			idMapEntity *ent = mapFile->GetEntity( i );
+			if ( ent != NULL ) {
+				idStr work = ent->epairs.GetString( "classname" );
 				if ( work.Icmp( classname ) == 0 ) {
 					if ( match && *match ) {
 						work = ent->epairs.GetString( "soundgroup" );
@@ -1128,7 +1148,6 @@ int idGameEdit::MapGetEntitiesMatchingClassWithString( const char *classname, co
 	return count;
 }
 
-
 /*
 ================
 idGameEdit::MapEntityTranslate
@@ -1136,6 +1155,7 @@ idGameEdit::MapEntityTranslate
 */
 void idGameEdit::MapEntityTranslate( const char *name, const idVec3 &v ) const {
 	idMapFile *mapFile = gameLocal.GetLevelMap();
+
 	if ( mapFile && name && *name ) {
 		idMapEntity *mapent = mapFile->FindEntity( name );
 		if ( mapent ) {
@@ -1147,63 +1167,80 @@ void idGameEdit::MapEntityTranslate( const char *name, const idVec3 &v ) const {
 	}
 }
 
-/***********************************************************************
+/*
+===============================================================================
 
-  Debugger
+	Debugger
 
-***********************************************************************/
+===============================================================================
+*/
 
-bool idGameEditExt::IsLineCode(const char* filename, int linenumber) const
-{
+/*
+================
+idGameEdit::IsLineCode
+================
+*/
+bool idGameEditExt::IsLineCode( const char *filename, int linenumber ) const {
 	idStr fileStr;
-	idProgram* program = &gameLocal.program;
-	for (int i = 0; i < program->NumStatements(); i++)
-	{
-		fileStr = program->GetFilename(program->GetStatement(i).file);
-		fileStr.BackSlashesToSlashes();
+	idProgram *program = &gameLocal.program;
 
-		if (strcmp(filename, fileStr.c_str()) == 0
-			&& program->GetStatement(i).linenumber == linenumber
-			)
-		{
+	for ( int i = 0; i < program->NumStatements( ); i++ ) 	{
+		fileStr = program->GetFilename( program->GetStatement( i ).file );
+		fileStr.BackSlashesToSlashes( );
+
+		if ( strcmp( filename, fileStr.c_str( ) ) == 0 && program->GetStatement( i ).linenumber == linenumber ) {
 			return true;
 		}
 	}
 	return false;
 }
 
-void idGameEditExt::GetLoadedScripts( idStrList** result )
-{
-	(*result)->Clear();
-	idProgram* program = &gameLocal.program;
+/*
+================
+idGameEdit::GetLoadedScripts
+================
+*/
+void idGameEditExt::GetLoadedScripts( idStrList **result ) {
+	( *result )->Clear();
+	idProgram *program = &gameLocal.program;
 
-	for (int i = 0; i < program->NumFilenames(); i++)
-	{
-		(*result)->AddUnique( idStr(program->GetFilename( i )) );
+	for ( int i = 0; i < program->NumFilenames(); i++ ) {
+		( *result )->AddUnique( idStr( program->GetFilename( i ) ) );
 	}
 }
 
-void idGameEditExt::MSG_WriteScriptList( idBitMsg* msg)
-{
-	idProgram* program = &gameLocal.program;
+/*
+================
+idGameEdit::MSG_WriteScriptList
+================
+*/
+void idGameEditExt::MSG_WriteScriptList( idBitMsg *msg ) {
+	idProgram *program = &gameLocal.program;
 
 	msg->WriteInt( program->NumFilenames() );
-	for (int i = 0; i < program->NumFilenames(); i++)
-	{
-		idStr file = program->GetFilename(i);
-		//fix this. it seams that scripts triggered by the runtime are stored with a wrong path
-		//the use // instead of '\'
+	for ( int i = 0; i < program->NumFilenames(); i++ ) {
+		idStr file = program->GetFilename( i );
+		// fix this. it seams that scripts triggered by the runtime are stored with a wrong path
+		// the use // instead of '\'
 		file.BackSlashesToSlashes();
-		msg->WriteString(file);
+		msg->WriteString( file );
 	}
 }
 
-const char*idGameEditExt::GetFilenameForStatement(idProgram* program, int index) const
-{
-	return program->GetFilenameForStatement(index);
+/*
+================
+idGameEdit::GetFilenameForStatement
+================
+*/
+const char *idGameEditExt::GetFilenameForStatement( idProgram *program, int index ) const {
+	return program->GetFilenameForStatement( index );
 }
 
-int idGameEditExt::GetLineNumberForStatement(idProgram* program, int index) const
-{
-	return program->GetLineNumberForStatement(index);
+/*
+================
+idGameEdit::GetLineNumberForStatement
+================
+*/
+int idGameEditExt::GetLineNumberForStatement( idProgram *program, int index ) const {
+	return program->GetLineNumberForStatement( index );
 }

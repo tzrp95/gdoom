@@ -40,7 +40,7 @@ If you have questions concerning this license or the applicable additional terms
 /*
 ===============================================================================
 
-  Articulated figure controller.
+	Articulated figure controller.
 
 ===============================================================================
 */
@@ -54,9 +54,9 @@ typedef struct jointConversion_s {
 } jointConversion_t;
 
 typedef struct afTouch_s {
-	idEntity *				touchedEnt;
-	idClipModel *			touchedClipModel;
-	idAFBody *				touchedByBody;
+	idEntity				*touchedEnt;
+	idClipModel				*touchedClipModel;
+	idAFBody				*touchedByBody;
 } afTouch_t;
 
 class idAF {
@@ -70,7 +70,7 @@ public:
 	void					SetAnimator( idAnimator *a ) { animator = a; }
 	bool					Load( idEntity *ent, const char *fileName );
 	bool					IsLoaded( void ) const { return isLoaded && self != NULL; }
-	const char *			GetName( void ) const { return name.c_str(); }
+	const char				*GetName( void ) const { return name.c_str(); }
 	void					SetupPose( idEntity *ent, int time );
 	void					ChangePose( idEntity *ent, int time );
 	int						EntitiesTouchingAF( afTouch_t touchList[ MAX_GENTITIES ] ) const;
@@ -81,8 +81,8 @@ public:
 	bool					IsActive( void ) const { return isActive; }
 	void					SetConstraintPosition( const char *name, const idVec3 &pos );
 
-	idPhysics_AF *			GetPhysics( void ) { return &physicsObj; }
-	const idPhysics_AF *	GetPhysics( void ) const { return &physicsObj; }
+	idPhysics_AF			*GetPhysics( void ) { return &physicsObj; }
+	const idPhysics_AF		*GetPhysics( void ) const { return &physicsObj; }
 	idBounds				GetBounds( void ) const;
 	bool					UpdateAnimation( void );
 
@@ -101,8 +101,8 @@ public:
 protected:
 	idStr					name;				// name of the loaded .af file
 	idPhysics_AF			physicsObj;			// articulated figure physics
-	idEntity *				self;				// entity using the animated model
-	idAnimator *			animator;			// animator on entity
+	idEntity				*self;				// entity using the animated model
+	idAnimator				*animator;			// animator on entity
 	int						modifiedAnim;		// anim to modify
 	idVec3					baseOrigin;			// offset of base body relative to skeletal model origin
 	idMat3					baseAxis;			// axis of base body relative to skeletal model origin

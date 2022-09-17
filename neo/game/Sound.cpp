@@ -27,6 +27,7 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 #include "sys/platform.h"
+
 #include "Entity.h"
 
 #include "Sound.h"
@@ -34,7 +35,9 @@ If you have questions concerning this license or the applicable additional terms
 /*
 ===============================================================================
 
-  SOUND
+	idSound
+
+	Generic sound emitter
 
 ===============================================================================
 */
@@ -112,7 +115,7 @@ void idSound::Spawn( void ) {
 
 	if ( ( wait > 0.0f ) && ( random >= wait ) ) {
 		random = wait - 0.001;
-		gameLocal.Warning( "speaker '%s' at (%s) has random >= wait", name.c_str(), GetPhysics()->GetOrigin().ToString(0) );
+		gameLocal.Warning( "speaker '%s' at (%s) has random >= wait", name.c_str(), GetPhysics()->GetOrigin().ToString( 0 ) );
 	}
 
 	soundVol		= 0.0f;
@@ -134,7 +137,7 @@ void idSound::Spawn( void ) {
 ================
 idSound::Event_Trigger
 
-this will toggle the idle idSound on and off
+This will toggle the idle idSound on and off
 ================
 */
 void idSound::Event_Trigger( idEntity *activator ) {
@@ -180,8 +183,6 @@ idSound::Think
 ================
 */
 void idSound::Think( void ) {
-	idAngles	ang;
-
 	// run physics
 	RunPhysics();
 
@@ -195,7 +196,6 @@ idSound::UpdateChangableSpawnArgs
 ===============
 */
 void idSound::UpdateChangeableSpawnArgs( const idDict *source ) {
-
 	idEntity::UpdateChangeableSpawnArgs( source );
 
 	if ( source ) {
@@ -207,7 +207,6 @@ void idSound::UpdateChangeableSpawnArgs( const idDict *source ) {
 
 		idVec3 origin;
 		idMat3 axis;
-
 		if ( GetPhysicsToSoundTransform( origin, axis ) ) {
 			refSound.origin = GetPhysics()->GetOrigin() + origin * axis;
 		} else {
@@ -219,7 +218,7 @@ void idSound::UpdateChangeableSpawnArgs( const idDict *source ) {
 
 		if ( ( wait > 0.0f ) && ( random >= wait ) ) {
 			random = wait - 0.001;
-			gameLocal.Warning( "speaker '%s' at (%s) has random >= wait", name.c_str(), GetPhysics()->GetOrigin().ToString(0) );
+			gameLocal.Warning( "speaker '%s' at (%s) has random >= wait", name.c_str(), GetPhysics()->GetOrigin().ToString( 0 ) );
 		}
 
 		if ( !refSound.waitfortrigger && ( wait > 0.0f ) ) {
@@ -227,7 +226,7 @@ void idSound::UpdateChangeableSpawnArgs( const idDict *source ) {
 			DoSound( false );
 			CancelEvents( &EV_Speaker_Timer );
 			PostEventSec( &EV_Speaker_Timer, wait + gameLocal.random.CRandomFloat() * random );
-		} else  if ( !refSound.waitfortrigger && !(refSound.referenceSound && refSound.referenceSound->CurrentlyPlaying() ) ) {
+		} else  if ( !refSound.waitfortrigger && !( refSound.referenceSound && refSound.referenceSound->CurrentlyPlaying() ) ) {
 			// start it if it isn't already playing, and we aren't waitForTrigger
 			DoSound( true );
 			timerOn = false;
@@ -245,10 +244,10 @@ void idSound::SetSound( const char *sound, int channel ) {
 	if ( shader != refSound.shader ) {
 		FreeSoundEmitter( true );
 	}
-	gameEdit->ParseSpawnArgsToRefSound(&spawnArgs, &refSound);
+	gameEdit->ParseSpawnArgsToRefSound( &spawnArgs, &refSound );
 	refSound.shader = shader;
 	// start it if it isn't already playing, and we aren't waitForTrigger
-	if ( !refSound.waitfortrigger && !(refSound.referenceSound && refSound.referenceSound->CurrentlyPlaying() ) ) {
+	if ( !refSound.waitfortrigger && !( refSound.referenceSound && refSound.referenceSound->CurrentlyPlaying() ) ) {
 		DoSound( true );
 	}
 }

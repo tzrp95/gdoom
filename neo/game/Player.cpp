@@ -88,9 +88,19 @@ const idEventDef EV_Player_InPDA( "inPDA", NULL, 'd' );
 const idEventDef EV_Player_ExitTeleporter( "exitTeleporter" );
 const idEventDef EV_Player_StopAudioLog( "stopAudioLog" );
 const idEventDef EV_Player_HideTip( "hideTip" );
-const idEventDef EV_Player_LevelTrigger( "levelTrigger" );
-const idEventDef EV_SpectatorTouch( "spectatorTouch", "et" );
+const idEventDef EV_Player_LevelTrigger( "levelTrigger" );;
+const idEventDef EV_SpectatorTouch( "<spectatorTouch>", "et" );
+const idEventDef EV_Player_GiveInventoryItem( "giveInventoryItem", "s" );
+const idEventDef EV_Player_RemoveInventoryItem( "removeInventoryItem", "s" );
 const idEventDef EV_Player_GetIdealWeapon( "getIdealWeapon", NULL, 's' );
+const idEventDef EV_Player_SetPowerupTime( "setPowerupTime", "dd" );
+const idEventDef EV_Player_IsPowerupActive( "isPowerupActive", "d", 'd' );
+const idEventDef EV_Player_WeaponAvailable( "weaponAvailable", "s", 'd' );
+const idEventDef EV_Player_StartWarp( "startWarp" );
+const idEventDef EV_Player_StopHelltime( "stopHelltime", "d" );
+const idEventDef EV_Player_ToggleBloom( "toggleBloom", "d" );
+const idEventDef EV_Player_SetBloomParms( "setBloomParms", "ff" );
+const idEventDef EV_Player_GetImpulseKey( "getImpulseKey", NULL, 'd' );
 
 CLASS_DECLARATION( idActor, idPlayer )
 	EVENT( EV_Player_GetButtons,			idPlayer::Event_GetButtons )
@@ -110,22 +120,33 @@ CLASS_DECLARATION( idActor, idPlayer )
 	EVENT( EV_Player_HideTip,				idPlayer::Event_HideTip )
 	EVENT( EV_Player_LevelTrigger,			idPlayer::Event_LevelTrigger )
 	EVENT( EV_Gibbed,						idPlayer::Event_Gibbed )
+	EVENT( EV_Player_GiveInventoryItem,		idPlayer::Event_GiveInventoryItem )
+	EVENT( EV_Player_RemoveInventoryItem,	idPlayer::Event_RemoveInventoryItem )
 	EVENT( EV_Player_GetIdealWeapon,		idPlayer::Event_GetIdealWeapon )
+	EVENT( EV_Player_WeaponAvailable,		idPlayer::Event_WeaponAvailable )
+	EVENT( EV_Player_SetPowerupTime,		idPlayer::Event_SetPowerupTime )
+	EVENT( EV_Player_IsPowerupActive,		idPlayer::Event_IsPowerupActive )
+	EVENT( EV_Player_StartWarp,				idPlayer::Event_StartWarp )
+	EVENT( EV_Player_StopHelltime,			idPlayer::Event_StopHelltime )
+	EVENT( EV_Player_ToggleBloom,			idPlayer::Event_ToggleBloom )
+	EVENT( EV_Player_SetBloomParms,			idPlayer::Event_SetBloomParms )
+	EVENT( EV_Player_GetImpulseKey,			idPlayer::Event_GetImpulseKey )
 END_CLASS
 
-const int MAX_RESPAWN_TIME = 10000;
-const int RAGDOLL_DEATH_TIME = 3000;
-const int MAX_PDAS = 64;
-const int MAX_PDA_ITEMS = 128;
-const int STEPUP_TIME = 200;
-const int MAX_INVENTORY_ITEMS = 20;
-
-idVec3 idPlayer::colorBarTable[ 5 ] = {
+/*
+==============
+idPlayer::colorBarTable
+==============
+*/
+idVec3 idPlayer::colorBarTable[ 8 ] = {
 	idVec3( 0.25f, 0.25f, 0.25f ),
 	idVec3( 1.00f, 0.00f, 0.00f ),
 	idVec3( 0.00f, 0.80f, 0.10f ),
 	idVec3( 0.20f, 0.50f, 0.80f ),
-	idVec3( 1.00f, 0.80f, 0.10f )
+	idVec3( 1.00f, 0.80f, 0.10f ),
+	idVec3( 0.425f, 0.484f, 0.445f ),
+	idVec3( 0.39f, 0.199f, 0.3f ),
+	idVec3( 0.484f, 0.312f, 0.074f)
 };
 
 /*
@@ -152,7 +173,7 @@ void idInventory::Clear( void ) {
 	memset( clip, -1, sizeof( clip ) );
 
 	items.DeleteContents( true );
-	memset(pdasViewed, 0, 4 * sizeof( pdasViewed[0] ) );
+	memset( pdasViewed, 0, 4 * sizeof( pdasViewed[0] ) );
 	pdas.Clear();
 	videos.Clear();
 	emails.Clear();
@@ -202,6 +223,9 @@ void idInventory::GivePowerUp( idPlayer *player, int powerup, int msec ) {
 			case ADRENALINE:
 				def = gameLocal.FindEntityDef( "powerup_adrenaline", false );
 				break;
+			case INVULNERABILITY:
+				def = gameLocal.FindEntityDef( "powerup_invulnerability", false );
+				break;
 		}
 		assert( def );
 		msec = def->dict.GetInt( "time" ) * 1000;
@@ -217,6 +241,7 @@ idInventory::ClearPowerUps
 */
 void idInventory::ClearPowerUps( void ) {
 	int i;
+
 	for ( i = 0; i < MAX_POWERUPS; i++ ) {
 		powerupEndTime[ i ] = 0;
 	}
@@ -242,22 +267,27 @@ void idInventory::GetPersistantData( idDict &dict ) {
 	// don't bother with powerups, maxhealth, maxarmor, or the clip
 
 	// ammo
-	for( i = 0; i < AMMO_NUMTYPES; i++ ) {
+	for ( i = 0; i < AMMO_NUMTYPES; i++ ) {
 		name = idWeapon::GetAmmoNameForNum( ( ammo_t )i );
 		if ( name ) {
 			dict.SetInt( name, ammo[ i ] );
 		}
 	}
 
+	// Save the clip data
+	for ( i = 0; i < MAX_WEAPONS; i++ ) {
+		dict.SetInt( va( "clip%i", i ), clip[ i ] );
+	}
+
 	// items
 	num = 0;
-	for( i = 0; i < items.Num(); i++ ) {
+	for ( i = 0; i < items.Num(); i++ ) {
 		item = items[ i ];
 
 		// copy all keys with "inv_"
 		kv = item->MatchPrefix( "inv_" );
 		if ( kv ) {
-			while( kv ) {
+			while ( kv ) {
 				sprintf( key, "item_%i %s", num, kv->GetKey().c_str() );
 				dict.Set( key, kv->GetValue() );
 				kv = item->MatchPrefix( "inv_", kv );
@@ -269,7 +299,7 @@ void idInventory::GetPersistantData( idDict &dict ) {
 
 	// pdas viewed
 	for ( i = 0; i < 4; i++ ) {
-		dict.SetInt( va("pdasViewed_%i", i), pdasViewed[i] );
+		dict.SetInt( va( "pdasViewed_%i", i ), pdasViewed[i] );
 	}
 
 	dict.SetInt( "selPDA", selPDA );
@@ -339,22 +369,27 @@ void idInventory::RestoreInventory( idPlayer *owner, const idDict &dict ) {
 	// the clip and powerups aren't restored
 
 	// ammo
-	for( i = 0; i < AMMO_NUMTYPES; i++ ) {
+	for ( i = 0; i < AMMO_NUMTYPES; i++ ) {
 		name = idWeapon::GetAmmoNameForNum( ( ammo_t )i );
 		if ( name ) {
 			ammo[ i ] = dict.GetInt( name );
 		}
 	}
 
+	// Restore the clip data
+	for ( i = 0; i < MAX_WEAPONS; i++ ) {
+		clip[i] = dict.GetInt( va( "clip%i", i ), "-1" );
+	}
+
 	// items
 	num = dict.GetInt( "items" );
 	items.SetNum( num );
-	for( i = 0; i < num; i++ ) {
+	for ( i = 0; i < num; i++ ) {
 		item = new idDict();
 		items[ i ] = item;
 		sprintf( itemname, "item_%i ", i );
 		kv = dict.MatchPrefix( itemname );
-		while( kv ) {
+		while ( kv ) {
 			key = kv->GetKey();
 			key.Strip( itemname );
 			item->Set( key, kv->GetValue() );
@@ -364,7 +399,7 @@ void idInventory::RestoreInventory( idPlayer *owner, const idDict &dict ) {
 
 	// pdas viewed
 	for ( i = 0; i < 4; i++ ) {
-		pdasViewed[i] = dict.GetInt(va("pdasViewed_%i", i));
+		pdasViewed[i] = dict.GetInt( va( "pdasViewed_%i", i ) );
 	}
 
 	selPDA = dict.GetInt( "selPDA" );
@@ -416,7 +451,6 @@ void idInventory::RestoreInventory( idPlayer *owner, const idDict &dict ) {
 		lti.triggerName = dict.GetString( itemname );
 		levelTriggers.Append( lti );
 	}
-
 }
 
 /*
@@ -438,18 +472,18 @@ void idInventory::Save( idSaveGame *savefile ) const {
 	savefile->WriteInt( deplete_ammount );
 	savefile->WriteInt( nextArmorDepleteTime );
 
-	for( i = 0; i < AMMO_NUMTYPES; i++ ) {
+	for ( i = 0; i < AMMO_NUMTYPES; i++ ) {
 		savefile->WriteInt( ammo[ i ] );
 	}
-	for( i = 0; i < MAX_WEAPONS; i++ ) {
+	for ( i = 0; i < MAX_WEAPONS; i++ ) {
 		savefile->WriteInt( clip[ i ] );
 	}
-	for( i = 0; i < MAX_POWERUPS; i++ ) {
+	for ( i = 0; i < MAX_POWERUPS; i++ ) {
 		savefile->WriteInt( powerupEndTime[ i ] );
 	}
 
 	savefile->WriteInt( items.Num() );
-	for( i = 0; i < items.Num(); i++ ) {
+	for ( i = 0; i < items.Num(); i++ ) {
 		savefile->WriteDict( items[ i ] );
 	}
 
@@ -466,17 +500,17 @@ void idInventory::Save( idSaveGame *savefile ) const {
 	savefile->WriteBool( turkeyScore );
 
 	savefile->WriteInt( pdas.Num() );
-	for( i = 0; i < pdas.Num(); i++ ) {
+	for ( i = 0; i < pdas.Num(); i++ ) {
 		savefile->WriteString( pdas[ i ] );
 	}
 
 	savefile->WriteInt( pdaSecurity.Num() );
-	for( i=0; i < pdaSecurity.Num(); i++ ) {
+	for ( i=0; i < pdaSecurity.Num(); i++ ) {
 		savefile->WriteString( pdaSecurity[ i ] );
 	}
 
 	savefile->WriteInt( videos.Num() );
-	for( i = 0; i < videos.Num(); i++ ) {
+	for ( i = 0; i < videos.Num(); i++ ) {
 		savefile->WriteString( videos[ i ] );
 	}
 
@@ -490,13 +524,13 @@ void idInventory::Save( idSaveGame *savefile ) const {
 	savefile->WriteInt( onePickupTime );
 
 	savefile->WriteInt( pickupItemNames.Num() );
-	for( i = 0; i < pickupItemNames.Num(); i++ ) {
+	for ( i = 0; i < pickupItemNames.Num(); i++ ) {
 		savefile->WriteString( pickupItemNames[i].icon );
 		savefile->WriteString( pickupItemNames[i].name );
 	}
 
 	savefile->WriteInt( objectiveNames.Num() );
-	for( i = 0; i < objectiveNames.Num(); i++ ) {
+	for ( i = 0; i < objectiveNames.Num(); i++ ) {
 		savefile->WriteString( objectiveNames[i].screenshot );
 		savefile->WriteString( objectiveNames[i].text );
 		savefile->WriteString( objectiveNames[i].title );
@@ -513,6 +547,12 @@ void idInventory::Save( idSaveGame *savefile ) const {
 	savefile->WriteBool( armorPulse );
 
 	savefile->WriteInt( lastGiveTime );
+
+	for ( i = 0; i < AMMO_NUMTYPES; i++ ) {
+		savefile->WriteInt( rechargeAmmo[i].ammo );
+		savefile->WriteInt( rechargeAmmo[i].rechargeTime );
+		savefile->WriteString( rechargeAmmo[i].ammoName );
+	}
 }
 
 /*
@@ -534,18 +574,18 @@ void idInventory::Restore( idRestoreGame *savefile ) {
 	savefile->ReadInt( deplete_ammount );
 	savefile->ReadInt( nextArmorDepleteTime );
 
-	for( i = 0; i < AMMO_NUMTYPES; i++ ) {
+	for ( i = 0; i < AMMO_NUMTYPES; i++ ) {
 		savefile->ReadInt( ammo[ i ] );
 	}
-	for( i = 0; i < MAX_WEAPONS; i++ ) {
+	for ( i = 0; i < MAX_WEAPONS; i++ ) {
 		savefile->ReadInt( clip[ i ] );
 	}
-	for( i = 0; i < MAX_POWERUPS; i++ ) {
+	for ( i = 0; i < MAX_POWERUPS; i++ ) {
 		savefile->ReadInt( powerupEndTime[ i ] );
 	}
 
 	savefile->ReadInt( num );
-	for( i = 0; i < num; i++ ) {
+	for ( i = 0; i < num; i++ ) {
 		idDict *itemdict = new idDict;
 
 		savefile->ReadDict( itemdict );
@@ -566,7 +606,7 @@ void idInventory::Restore( idRestoreGame *savefile ) {
 	savefile->ReadBool( turkeyScore );
 
 	savefile->ReadInt( num );
-	for( i = 0; i < num; i++ ) {
+	for ( i = 0; i < num; i++ ) {
 		idStr strPda;
 		savefile->ReadString( strPda );
 		pdas.Append( strPda );
@@ -582,7 +622,7 @@ void idInventory::Restore( idRestoreGame *savefile ) {
 
 	// videos
 	savefile->ReadInt( num );
-	for( i = 0; i < num; i++ ) {
+	for ( i = 0; i < num; i++ ) {
 		idStr strVideo;
 		savefile->ReadString( strVideo );
 		videos.Append( strVideo );
@@ -590,7 +630,7 @@ void idInventory::Restore( idRestoreGame *savefile ) {
 
 	// email
 	savefile->ReadInt( num );
-	for( i = 0; i < num; i++ ) {
+	for ( i = 0; i < num; i++ ) {
 		idStr strEmail;
 		savefile->ReadString( strEmail );
 		emails.Append( strEmail );
@@ -600,7 +640,7 @@ void idInventory::Restore( idRestoreGame *savefile ) {
 	savefile->ReadInt( nextItemNum );
 	savefile->ReadInt( onePickupTime );
 	savefile->ReadInt( num );
-	for( i = 0; i < num; i++ ) {
+	for ( i = 0; i < num; i++ ) {
 		idItemInfo info;
 
 		savefile->ReadString( info.icon );
@@ -610,7 +650,7 @@ void idInventory::Restore( idRestoreGame *savefile ) {
 	}
 
 	savefile->ReadInt( num );
-	for( i = 0; i < num; i++ ) {
+	for ( i = 0; i < num; i++ ) {
 		idObjectiveInfo obj;
 
 		savefile->ReadString( obj.screenshot );
@@ -633,6 +673,15 @@ void idInventory::Restore( idRestoreGame *savefile ) {
 	savefile->ReadBool( armorPulse );
 
 	savefile->ReadInt( lastGiveTime );
+
+	for ( i = 0; i < AMMO_NUMTYPES; i++ ) {
+		savefile->ReadInt( rechargeAmmo[i].ammo );
+		savefile->ReadInt( rechargeAmmo[i].rechargeTime );
+
+		idStr name;
+		savefile->ReadString( name );
+		strcpy( rechargeAmmo[i].ammoName, name );
+	}
 }
 
 /*
@@ -646,10 +695,10 @@ ammo_t idInventory::AmmoIndexForAmmoClass( const char *ammo_classname ) const {
 
 /*
 ==============
-idInventory::AmmoIndexForAmmoClass
+idInventory::MaxAmmoForAmmoClass
 ==============
 */
-int idInventory::MaxAmmoForAmmoClass( idPlayer *owner, const char *ammo_classname ) const {
+int idInventory::MaxAmmoForAmmoClass( const idPlayer *owner, const char *ammo_classname ) const {
 	return owner->spawnArgs.GetInt( va( "max_%s", ammo_classname ), "0" );
 }
 
@@ -665,14 +714,14 @@ const char *idInventory::AmmoPickupNameForIndex( ammo_t ammonum ) const {
 /*
 ==============
 idInventory::WeaponIndexForAmmoClass
-mapping could be prepared in the constructor
+
+Mapping could be prepared in the constructor
 ==============
 */
 int idInventory::WeaponIndexForAmmoClass( const idDict & spawnArgs, const char *ammo_classname ) const {
-	int i;
-	const char *weapon_classname;
-	for( i = 0; i < MAX_WEAPONS; i++ ) {
-		weapon_classname = spawnArgs.GetString( va( "def_weapon%d", i ) );
+
+	for ( int i = 0; i < MAX_WEAPONS; i++ ) {
+		const char *weapon_classname = spawnArgs.GetString( va( "def_weapon%d", i ) );
 		if ( !weapon_classname ) {
 			continue;
 		}
@@ -709,7 +758,7 @@ ammo_t idInventory::AmmoIndexForWeaponClass( const char *weapon_classname, int *
 idInventory::AddPickupName
 ==============
 */
-void idInventory::AddPickupName( const char *name, const char *icon ) {
+void idInventory::AddPickupName( const char *name, const char *icon, idPlayer *owner ) { 
 	int num;
 
 	num = pickupItemNames.Num();
@@ -722,6 +771,15 @@ void idInventory::AddPickupName( const char *name, const char *icon ) {
 			info.name = name;
 		}
 		info.icon = icon;
+
+		if ( gameLocal.isServer ) {
+			idBitMsg	msg;
+			byte		msgBuf[MAX_EVENT_PARAM_SIZE];
+
+			msg.Init( msgBuf, sizeof( msgBuf ) );
+			msg.WriteString( name, MAX_EVENT_PARAM_SIZE );
+			owner->ServerSendEvent( idPlayer::EVENT_PICKUPNAME, &msg, false, -1 );
+		}
 	}
 }
 
@@ -743,7 +801,26 @@ bool idInventory::Give( idPlayer *owner, const idDict &spawnArgs, const char *st
 	idItemInfo				info;
 	const char				*name;
 
-	if ( !idStr::Icmpn( statname, "ammo_", 5 ) ) {
+	if ( !idStr::Icmp( statname, "ammo_bloodstone" ) ) {
+		i = AmmoIndexForAmmoClass( statname );
+		max = MaxAmmoForAmmoClass( owner, statname );
+
+		if ( max <= 0 ) {
+			// No Max
+			ammo[ i ] += atoi( value );
+		} else {
+			// Already at or above the max so don't allow the give
+			if ( ammo[ i ] >= max ) {
+				ammo[ i ] = max;
+				return false;
+			}
+			// We were below the max so accept the give but cap it at the max
+			ammo[ i ] += atoi( value );
+			if ( ammo[ i ] > max ) {
+				ammo[ i ] = max;
+			}
+		}
+	} else if ( !idStr::Icmpn( statname, "ammo_", 5 ) ) {
 		i = AmmoIndexForAmmoClass( statname );
 		max = MaxAmmoForAmmoClass( owner, statname );
 		if ( ammo[ i ] >= max ) {
@@ -759,7 +836,7 @@ bool idInventory::Give( idPlayer *owner, const idDict &spawnArgs, const char *st
 
 			name = AmmoPickupNameForIndex( i );
 			if ( idStr::Length( name ) ) {
-				AddPickupName( name, "" );
+				AddPickupName( name, "", owner ); 
 			}
 		}
 	} else if ( !idStr::Icmp( statname, "armor" ) ) {
@@ -776,18 +853,29 @@ bool idInventory::Give( idPlayer *owner, const idDict &spawnArgs, const char *st
 			armorPulse = true;
 		}
 	} else if ( idStr::FindText( statname, "inclip_" ) == 0 ) {
-		i = WeaponIndexForAmmoClass( spawnArgs, statname + 7 );
+		idStr temp = statname;
+		i = atoi( temp.Mid( 7, 2 ) );
 		if ( i != -1 ) {
 			// set, don't add. not going over the clip size limit.
-			clip[ i ] = atoi( value );
+			clip[ i ] = atoi( value );	// IFNDEF D3XP
 		}
+	} else if ( !idStr::Icmp( statname, "invulnerability" ) ) {
+		owner->GivePowerUp( INVULNERABILITY, SEC2MS( atof( value ) ) );
+	} else if ( !idStr::Icmp( statname, "helltime" ) ) {
+		owner->GivePowerUp( HELLTIME, SEC2MS( atof( value ) ) );
+	} else if ( !idStr::Icmp( statname, "envirosuit" ) ) {
+		owner->GivePowerUp( ENVIROSUIT, SEC2MS( atof( value ) ) );
+		owner->GivePowerUp( ENVIROTIME, SEC2MS( atof( value ) ) );
 	} else if ( !idStr::Icmp( statname, "berserk" ) ) {
-		GivePowerUp( owner, BERSERK, SEC2MS( atof( value ) ) );
+		owner->GivePowerUp( BERSERK, SEC2MS( atof( value ) ) );
+	} else if ( !idStr::Icmp( statname, "adrenaline" ) ) {
+		owner->GivePowerUp( ADRENALINE, SEC2MS( atof( value ) ) );
 	} else if ( !idStr::Icmp( statname, "mega" ) ) {
 		GivePowerUp( owner, MEGAHEALTH, SEC2MS( atof( value ) ) );
 	} else if ( !idStr::Icmp( statname, "weapon" ) ) {
+
 		tookWeapon = false;
-		for( pos = value; pos != NULL; pos = end ) {
+		for ( pos = value; pos != NULL; pos = end ) {
 			end = strchr( pos, ',' );
 			if ( end ) {
 				len = end - pos;
@@ -797,16 +885,16 @@ bool idInventory::Give( idPlayer *owner, const idDict &spawnArgs, const char *st
 			}
 
 			idStr weaponName( pos, 0, len );
-
 			// find the number of the matching weapon name
-			for( i = 0; i < MAX_WEAPONS; i++ ) {
+			for ( i = 0; i < MAX_WEAPONS; i++ ) {
 				if ( weaponName == spawnArgs.GetString( va( "def_weapon%d", i ) ) ) {
 					break;
 				}
 			}
 
 			if ( i >= MAX_WEAPONS ) {
-				gameLocal.Error( "Unknown weapon '%s'", weaponName.c_str() );
+				gameLocal.Warning( "Unknown weapon '%s'", weaponName.c_str() );
+				continue;
 			}
 
 			// cache the media for this weapon
@@ -815,13 +903,13 @@ bool idInventory::Give( idPlayer *owner, const idDict &spawnArgs, const char *st
 			// don't pickup "no ammo" weapon types twice
 			// not for D3 SP .. there is only one case in the game where you can get a no ammo
 			// weapon when you might already have it, in that case it is more conistent to pick it up
-			if ( gameLocal.isMultiplayer && weaponDecl && ( weapons & ( 1 << i ) ) && !weaponDecl->dict.GetInt( "ammoRequired" ) ) {
+			if ( gameLocal.isMultiplayer && weaponDecl != NULL && ( weapons & ( 1 << i ) ) && !weaponDecl->dict.GetInt( "ammoRequired" ) ) {
 				continue;
 			}
 
 			if ( !gameLocal.world->spawnArgs.GetBool( "no_Weapons" ) || ( weaponName == "weapon_fists" ) || ( weaponName == "weapon_soulcube" ) ) {
 				if ( ( weapons & ( 1 << i ) ) == 0 || gameLocal.isMultiplayer ) {
-					if ( owner->GetUserInfo()->GetBool( "ui_autoSwitch" ) && idealWeapon ) {
+					if ( owner->GetUserInfo()->GetBool( "ui_autoSwitch" ) && idealWeapon && i != owner->weapon_bloodstone_active1 && i != owner->weapon_bloodstone_active2 && i != owner->weapon_bloodstone_active3 ) {
 						assert( !gameLocal.isClient );
 						*idealWeapon = i;
 					}
@@ -859,7 +947,7 @@ void idInventory::Drop( const idDict &spawnArgs, const char *weapon_classname, i
 	// also remove the ammo associated with the weapon as we pushed it in the item
 	assert( weapon_index != -1 || weapon_classname );
 	if ( weapon_index == -1 ) {
-		for( weapon_index = 0; weapon_index < MAX_WEAPONS; weapon_index++ ) {
+		for ( weapon_index = 0; weapon_index < MAX_WEAPONS; weapon_index++ ) {
 			if ( !idStr::Icmp( weapon_classname, spawnArgs.GetString( va( "def_weapon%d", weapon_index ) ) ) ) {
 				break;
 			}
@@ -903,12 +991,47 @@ int idInventory::HasAmmo( ammo_t type, int amount ) {
 idInventory::HasAmmo
 ===============
 */
-int idInventory::HasAmmo( const char *weapon_classname ) {
+int idInventory::HasAmmo( const char *weapon_classname, bool includeClip, idPlayer *owner ) {
 	int ammoRequired;
 	ammo_t ammo_i = AmmoIndexForWeaponClass( weapon_classname, &ammoRequired );
-	return HasAmmo( ammo_i, ammoRequired );
+
+	int ammoCount = HasAmmo( ammo_i, ammoRequired );
+	if ( includeClip && owner ) {
+		ammoCount += clip[owner->SlotForWeapon( weapon_classname )];
+	}
+	return ammoCount;
 }
 
+/*
+===============
+idInventory::HasEmptyClipCannotRefill
+===============
+*/
+bool idInventory::HasEmptyClipCannotRefill( const char *weapon_classname, idPlayer *owner ) {
+	int clipSize = clip[owner->SlotForWeapon( weapon_classname )];
+	if ( clipSize ) {
+		return false;
+	}
+
+	const idDeclEntityDef *decl = gameLocal.FindEntityDef( weapon_classname, false );
+	if ( decl == NULL ) {
+		gameLocal.Error( "Unknown weapon in decl '%s'", weapon_classname );
+		return false;
+	}
+
+	int minclip = decl->dict.GetInt( "minclipsize" );
+	if ( !minclip ) {
+		return false;
+	}
+
+	ammo_t ammo_i = AmmoIndexForAmmoClass( decl->dict.GetString( "ammoType" ) );
+	int ammoRequired = decl->dict.GetInt( "ammoRequired" );
+	int ammoCount = HasAmmo( ammo_i, ammoRequired );
+	if ( ammoCount < minclip ) {
+		return true;
+	}
+	return false;
+}
 /*
 ===============
 idInventory::UseAmmo
@@ -948,12 +1071,98 @@ void idInventory::UpdateArmor( void ) {
 }
 
 /*
+===============
+idInventory::InitRechargeAmmo
+
+Loads any recharge ammo definitions from the ammo_types entity definitions.
+===============
+*/
+void idInventory::InitRechargeAmmo( idPlayer *owner ) {
+	memset ( rechargeAmmo, 0, sizeof( rechargeAmmo ) );
+
+	const idKeyValue *kv = owner->spawnArgs.MatchPrefix( "ammorecharge_" );
+	while ( kv ) {
+		idStr key = kv->GetKey();
+		idStr ammoname = key.Right( key.Length()- strlen( "ammorecharge_" ) );
+		int ammoType = AmmoIndexForAmmoClass( ammoname );
+		rechargeAmmo[ammoType].ammo = ( atof( kv->GetValue().c_str() ) * 1000 );
+		strcpy( rechargeAmmo[ammoType].ammoName, ammoname );
+		kv = owner->spawnArgs.MatchPrefix( "ammorecharge_", kv );
+	}
+}
+
+/*
+===============
+idInventory::RechargeAmmo
+
+Called once per frame to update any ammo amount for ammo types that recharge.
+===============
+*/
+void idInventory::RechargeAmmo( idPlayer *owner ) {
+	for ( int i = 0; i < AMMO_NUMTYPES; i++ ) {
+		if ( rechargeAmmo[i].ammo > 0 ) {
+			if ( !rechargeAmmo[i].rechargeTime ) {
+				//Initialize the recharge timer.
+				rechargeAmmo[i].rechargeTime = gameLocal.time;
+			}
+			int elapsed = gameLocal.time - rechargeAmmo[i].rechargeTime;
+			if ( elapsed >= rechargeAmmo[i].ammo ) {
+				int intervals = ( gameLocal.time - rechargeAmmo[i].rechargeTime ) / rechargeAmmo[i].ammo;
+				ammo[i] += intervals;
+
+				int max = MaxAmmoForAmmoClass( owner, rechargeAmmo[i].ammoName );
+				if ( max > 0 ) {
+					if ( ammo[i] > max ) {
+						ammo[i] = max;
+					}
+				}
+				rechargeAmmo[i].rechargeTime += intervals*rechargeAmmo[i].ammo;
+			}
+		}
+	}
+}
+
+/*
+===============
+idInventory::CanGive
+===============
+*/
+bool idInventory::CanGive( idPlayer *owner, const idDict &spawnArgs, const char *statname, const char *value, int *idealWeapon ) {
+
+	if ( !idStr::Icmp( statname, "ammo_bloodstone" ) ) {
+		int max = MaxAmmoForAmmoClass( owner, statname );
+		int i = AmmoIndexForAmmoClass( statname );
+
+		if ( max <= 0 ) {
+			// No Max
+			return true;
+		} else {
+			// Already at or above the max so don't allow the give
+			if ( ammo[ i ] >= max ) {
+				ammo[ i ] = max;
+				return false;
+			}
+			return true;
+		}
+	} else if ( !idStr::Icmp( statname, "item" ) || !idStr::Icmp( statname, "icon" ) || !idStr::Icmp( statname, "name" ) ) {
+		// ignore these as they're handled elsewhere
+		// These items should not be considered as succesful gives because it messes up the max ammo items
+		return false;
+	}
+	return true;
+}
+
+/*
 ==============
 idPlayer::idPlayer
 ==============
 */
 idPlayer::idPlayer() {
 	memset( &usercmd, 0, sizeof( usercmd ) );
+
+	// added from Arx --->
+	lastPlayerAlertOrigin = vec3_zero;
+	// <---
 
 	noclip					= false;
 	godmode					= false;
@@ -976,6 +1185,9 @@ idPlayer::idPlayer() {
 	hud						= NULL;
 	objectiveSystem			= NULL;
 	objectiveSystemOpen		= false;
+
+	mountedObject			= NULL;
+	enviroSuitLight			= NULL;
 
 	heartRate				= BASE_HEARTRATE;
 	heartInfo.Init( 0, 0, 0, 0 );
@@ -1000,6 +1212,8 @@ idPlayer::idPlayer() {
 	colorBarIndex			= 0;
 	forcedReady				= false;
 	wantSpectate			= false;
+
+	carryingFlag			= false;
 
 	lastHitToggle			= false;
 
@@ -1032,11 +1246,24 @@ idPlayer::idPlayer() {
 	currentWeapon			= -1;
 	idealWeapon				= -1;
 	previousWeapon			= -1;
+	quickWeapon				= -1;
 	weaponSwitchTime		=  0;
 	weaponEnabled			= true;
-	weapon_soulcube			= -1;
+
 	weapon_pda				= -1;
 	weapon_fists			= -1;
+	weapon_chainsaw			= -1;
+	weapon_soulcube			= -1;
+	weapon_bloodstone		= -1;
+	weapon_bloodstone_active1 = -1;
+	weapon_bloodstone_active2 = -1;
+	weapon_bloodstone_active3 = -1;
+
+	harvest_lock			= false;
+
+	hudPowerup				= -1;
+	lastHudPowerup			= -1;
+	hudPowerupDuration		= 0;
 	showWeaponViewModel		= true;
 
 	skin					= NULL;
@@ -1133,6 +1360,16 @@ idPlayer::idPlayer() {
 	isChatting				= false;
 
 	selfSmooth				= false;
+
+	// DentonMod
+	memset(&weaponZoom, 0, sizeof( weaponZoom ) );
+	memset(projectileType, 0, sizeof( projectileType ) );
+
+	// Ability stuff
+	painToleranceScale		= 1.0f;
+
+	nextHealthRegen			= 0;
+	prevHeatlh				= health;
 }
 
 /*
@@ -1178,14 +1415,14 @@ void idPlayer::SetupWeaponEntity( void ) {
 		weapon.GetEntity()->Clear();
 		currentWeapon = -1;
 	} else if ( !gameLocal.isClient ) {
-		weapon = static_cast<idWeapon *>( gameLocal.SpawnEntityType( idWeapon::Type, NULL ) );
+		weapon = static_cast<idWeapon*>( gameLocal.SpawnEntityType( idWeapon::Type, NULL ) );
 		weapon.GetEntity()->SetOwner( this );
 		currentWeapon = -1;
 	}
 
-	for( w = 0; w < MAX_WEAPONS; w++ ) {
+	for ( w = 0; w < MAX_WEAPONS; w++ ) {
 		weap = spawnArgs.GetString( va( "def_weapon%d", w ) );
-		if ( weap && *weap ) {
+		if ( weap != NULL && *weap != '\0' ) {
 			idWeapon::CacheWeapon( weap );
 		}
 	}
@@ -1206,16 +1443,26 @@ void idPlayer::Init( void ) {
 	oldButtons				= 0;
 	oldFlags				= 0;
 
+	memset( &weaponZoom, 0, sizeof( weaponZoom ) );	// DentonMod
+
 	currentWeapon			= -1;
 	idealWeapon				= -1;
 	previousWeapon			= -1;
+	quickWeapon				= -1;
 	weaponSwitchTime		= 0;
 	weaponEnabled			= true;
-	weapon_soulcube			= SlotForWeapon( "weapon_soulcube" );
-	weapon_pda				= SlotForWeapon( "weapon_pda" );
-	weapon_fists			= SlotForWeapon( "weapon_fists" );
-	showWeaponViewModel		= GetUserInfo()->GetBool( "ui_showGun" );
 
+	weapon_pda					= SlotForWeapon( "weapon_pda" );
+	weapon_fists				= SlotForWeapon( "weapon_fists" );
+	weapon_chainsaw				= SlotForWeapon( "weapon_chainsaw" );
+	weapon_soulcube				= SlotForWeapon( "weapon_soulcube" );	
+	weapon_bloodstone			= SlotForWeapon( "weapon_bloodstone_passive" );
+	weapon_bloodstone_active1	= SlotForWeapon( "weapon_bloodstone_active1" );
+	weapon_bloodstone_active2	= SlotForWeapon( "weapon_bloodstone_active2" );
+	weapon_bloodstone_active3	= SlotForWeapon( "weapon_bloodstone_active3" );
+
+	harvest_lock			= false;
+	showWeaponViewModel		= GetUserInfo()->GetBool( "ui_showGun" );
 
 	lastDmgTime				= 0;
 	lastArmorPulse			= -10000;
@@ -1237,6 +1484,23 @@ void idPlayer::Init( void ) {
 	influenceEntity			= NULL;
 	influenceMaterial		= NULL;
 	influenceSkin			= NULL;
+
+	mountedObject			= NULL;
+	if ( enviroSuitLight.IsValid() ) {
+		enviroSuitLight.GetEntity()->PostEventMS( &EV_Remove, 0 );
+	}
+	enviroSuitLight			= NULL;
+	healthRecharge			= false;
+	lastHealthRechargeTime	= 0;
+	rechargeSpeed			= 500;
+	new_g_damageScale		= 1.f;
+	bloomEnabled			= false;
+	bloomSpeed				= 1.f;
+	bloomIntensity			= -0.01f;
+	inventory.InitRechargeAmmo( this );
+	hudPowerup				= -1;
+	lastHudPowerup			= -1;
+	hudPowerupDuration		= 0;
 
 	currentLoggedAccel		= 0;
 
@@ -1268,6 +1532,7 @@ void idPlayer::Init( void ) {
 	SetupWeaponEntity();
 	currentWeapon = -1;
 	previousWeapon = -1;
+	quickWeapon		= -1;
 
 	heartRate = BASE_HEARTRATE;
 	AdjustHeartRate( BASE_HEARTRATE, 0.0f, 0.0f, true );
@@ -1280,7 +1545,7 @@ void idPlayer::Init( void ) {
 	// set the pm_ cvars
 	if ( !gameLocal.isMultiplayer || gameLocal.isServer ) {
 		kv = spawnArgs.MatchPrefix( "pm_", NULL );
-		while( kv ) {
+		while ( kv ) {
 			cvarSystem->SetCVarString( kv->GetKey(), kv->GetValue() );
 			kv = spawnArgs.MatchPrefix( "pm_", kv );
 		}
@@ -1314,7 +1579,7 @@ void idPlayer::Init( void ) {
 	viewBob.Zero();
 
 	value = spawnArgs.GetString( "model" );
-	if ( value && ( *value != 0 ) ) {
+	if ( value != NULL && ( *value != '\0' )) {
 		SetModel( value );
 	}
 
@@ -1323,6 +1588,7 @@ void idPlayer::Init( void ) {
 		cursor->SetStateString( "combatcursor", "1" );
 		cursor->SetStateString( "itemcursor", "0" );
 		cursor->SetStateString( "guicursor", "0" );
+		cursor->SetStateString( "grabbercursor", "0" );
 	}
 
 	if ( ( gameLocal.isMultiplayer || g_testDeath.GetBool() ) && skin ) {
@@ -1409,6 +1675,12 @@ void idPlayer::Init( void ) {
 	}
 
 	cvarSystem->SetCVarBool( "ui_chat", false );
+
+	// ability stuff
+	painToleranceScale	= 1.0f;
+
+	nextHealthRegen			= 0;
+	prevHeatlh				= health;
 }
 
 /*
@@ -1439,7 +1711,7 @@ void idPlayer::Spawn( void ) {
 	physicsObj.SetSelf( this );
 	SetClipModel();
 	physicsObj.SetMass( spawnArgs.GetFloat( "mass", "100" ) );
-	physicsObj.SetContents( CONTENTS_BODY );
+	physicsObj.SetContents( CONTENTS_BODY | ( use_combat_bbox ? CONTENTS_SOLID:0 ) );
 	physicsObj.SetClipMask( MASK_PLAYERSOLID );
 	SetPhysics( &physicsObj );
 	InitAASLocation();
@@ -1457,19 +1729,24 @@ void idPlayer::Spawn( void ) {
 		}
 		if ( hud ) {
 			hud->Activate( true, gameLocal.time );
+			if ( gameLocal.mpGame.IsGametypeFlagBased() ) {
+				hud->SetStateInt( "red_team_score", gameLocal.mpGame.GetFlagPoints( 0 ) );
+				hud->SetStateInt( "blue_team_score", gameLocal.mpGame.GetFlagPoints( 1 ) );
+			}
 		}
 
 		// load cursor
 		if ( spawnArgs.GetString( "cursor", "", temp ) ) {
 			cursor = uiManager->FindGui( temp, true, gameLocal.isMultiplayer, gameLocal.isMultiplayer );
 		}
+
 		if ( cursor ) {
 			// DG: make it scale to 4:3 so crosshair looks properly round
 			//     yes, like so many scaling-related things this is a bit hacky
 			//     and note that this is special cased in StateChanged and you
 			//     can *not* generally set windowDef properties like this.
-			cursor->SetStateBool("scaleto43", true);
-			cursor->StateChanged(gameLocal.time); // DG end
+			cursor->SetStateBool( "scaleto43", true );
+			cursor->StateChanged( gameLocal.time ); // DG end
 
 			cursor->Activate( true, gameLocal.time );
 		}
@@ -1520,6 +1797,7 @@ void idPlayer::Spawn( void ) {
 			SetupWeaponEntity();
 			SpawnFromSpawnSpot();
 			forceRespawn = true;
+			wantSpectate = true;
 			assert( spectating );
 		}
 	} else {
@@ -1537,6 +1815,7 @@ void idPlayer::Spawn( void ) {
 			ent->ActivateTargets( this );
 		}
 	}
+
 	if ( hud ) {
 		// We can spawn with a full soul cube, so we need to make sure the hud knows this
 		if ( weapon_soulcube > 0 && ( inventory.weapons & ( 1 << weapon_soulcube ) ) ) {
@@ -1544,6 +1823,14 @@ void idPlayer::Spawn( void ) {
 			if ( inventory.ammo[ idWeapon::GetAmmoNumForName( "ammo_souls" ) ] >= max_souls ) {
 				hud->HandleNamedEvent( "soulCubeReady" );
 			}
+		}
+
+		// We can spawn with a full bloodstone, so make sure the hud knows
+		if ( weapon_bloodstone > 0 && ( inventory.weapons & ( 1 << weapon_bloodstone ) ) ) {
+			//int max_blood = inventory.MaxAmmoForAmmoClass( this, "ammo_bloodstone" );
+			//if ( inventory.ammo[ idWeapon::GetAmmoNumForName( "ammo_bloodstone" ) ] >= max_blood ) {
+				hud->HandleNamedEvent( "bloodstoneReady" );
+			//}
 		}
 		hud->HandleNamedEvent( "itemPickup" );
 	}
@@ -1561,7 +1848,7 @@ void idPlayer::Spawn( void ) {
 		if ( weapon.GetEntity() ) {
 			weapon.GetEntity()->LowerWeapon();
 		}
-		idealWeapon = 0;
+		idealWeapon = weapon_fists;
 	} else {
 		hiddenWeapon = false;
 	}
@@ -1582,15 +1869,21 @@ void idPlayer::Spawn( void ) {
 	inventory.selPDA = 0;
 
 	if ( !gameLocal.isMultiplayer ) {
+
+		int startingHealth = gameLocal.world->spawnArgs.GetInt( "startingHealth" );
+        if ( ( startingHealth > 0 ) && ( health > startingHealth ) ) {
+            health = startingHealth;
+        } 
+
 		if ( g_skill.GetInteger() < 2 ) {
 			if ( health < 25 ) {
 				health = 25;
 			}
 			if ( g_useDynamicProtection.GetBool() ) {
-				g_damageScale.SetFloat( 1.0f );
+				new_g_damageScale = 1.0f;
 			}
 		} else {
-			g_damageScale.SetFloat( 1.0f );
+			new_g_damageScale = 1.0f;
 			g_armorProtection.SetFloat( ( g_skill.GetInteger() < 2 ) ? 0.4f : 0.2f );
 
 			if ( g_skill.GetInteger() == 3 ) {
@@ -1599,6 +1892,54 @@ void idPlayer::Spawn( void ) {
 			}
 		}
 	}
+
+	// Setup the weapon toggle lists
+	const idKeyValue *kv;
+	kv = spawnArgs.MatchPrefix( "weapontoggle", NULL );
+	while ( kv ) {
+		WeaponToggle_t newToggle;
+		strcpy( newToggle.name, kv->GetKey().c_str() );
+
+		idStr toggleData = kv->GetValue();
+
+		idLexer src;
+		idToken token;
+		src.LoadMemory( toggleData, toggleData.Length(), "toggleData" );
+		while ( 1 ) {
+			if ( !src.ReadToken( &token ) ) {
+				break;
+			}
+			int index = atoi( token.c_str() );
+			newToggle.toggleList.Append( index );
+
+			// Skip the ,
+			src.ReadToken( &token );
+		}
+		weaponToggles.Set( newToggle.name, newToggle );
+
+		kv = spawnArgs.MatchPrefix( "weapontoggle", kv );
+	}
+
+	memset( projectileType, 0, sizeof( projectileType ) );	// DentonMod
+
+	if ( g_skill.GetInteger() >= 3 ) {
+		if ( !WeaponAvailable( "weapon_bloodstone_passive" ) ) {
+			GiveInventoryItem( "weapon_bloodstone_passive" );
+		}
+		if ( !WeaponAvailable( "weapon_bloodstone_active1" ) ) {
+			GiveInventoryItem( "weapon_bloodstone_active1" );
+		}
+		if ( !WeaponAvailable( "weapon_bloodstone_active2" ) ) {
+			GiveInventoryItem( "weapon_bloodstone_active2" );
+		}
+		if ( !WeaponAvailable( "weapon_bloodstone_active3" ) ) {
+			GiveInventoryItem( "weapon_bloodstone_active3" );
+		}
+	}
+
+	bloomEnabled			= false;
+	bloomSpeed				= 1;
+	bloomIntensity			= -0.01f;
 }
 
 /*
@@ -1611,6 +1952,14 @@ Release any resources used by the player.
 idPlayer::~idPlayer() {
 	delete weapon.GetEntity();
 	weapon = NULL;
+
+	if ( enviroSuitLight.IsValid() ) {
+		enviroSuitLight.GetEntity()->ProcessEvent( &EV_Remove );
+	}
+	// have to do this here, idMultiplayerGame::DisconnectClient() is too late
+	if ( gameLocal.isMultiplayer && gameLocal.mpGame.IsGametypeFlagBased() ) {
+		ReturnFlag();
+	}
 }
 
 /*
@@ -1649,9 +1998,19 @@ void idPlayer::Save( idSaveGame *savefile ) const {
 	savefile->WriteUserInterface( objectiveSystem, false );
 	savefile->WriteBool( objectiveSystemOpen );
 
-	savefile->WriteInt( weapon_soulcube );
 	savefile->WriteInt( weapon_pda );
 	savefile->WriteInt( weapon_fists );
+	savefile->WriteInt( weapon_chainsaw );
+	savefile->WriteInt( weapon_soulcube );
+	savefile->WriteInt( weapon_bloodstone );
+	savefile->WriteInt( weapon_bloodstone_active1 );
+	savefile->WriteInt( weapon_bloodstone_active2 );
+	savefile->WriteInt( weapon_bloodstone_active3 );
+
+	savefile->WriteBool( harvest_lock );
+	savefile->WriteInt( hudPowerup );
+	savefile->WriteInt( lastHudPowerup );
+	savefile->WriteInt( hudPowerupDuration );
 
 	savefile->WriteInt( heartRate );
 
@@ -1711,7 +2070,7 @@ void idPlayer::Save( idSaveGame *savefile ) const {
 	savefile->WriteStaticObject( physicsObj );
 
 	savefile->WriteInt( aasLocation.Num() );
-	for( i = 0; i < aasLocation.Num(); i++ ) {
+	for ( i = 0; i < aasLocation.Num(); i++ ) {
 		savefile->WriteInt( aasLocation[ i ].areaNum );
 		savefile->WriteVec3( aasLocation[ i ].pos );
 	}
@@ -1735,6 +2094,7 @@ void idPlayer::Save( idSaveGame *savefile ) const {
 	savefile->WriteInt( currentWeapon );
 	savefile->WriteInt( idealWeapon );
 	savefile->WriteInt( previousWeapon );
+	savefile->WriteInt( quickWeapon ); 
 	savefile->WriteInt( weaponSwitchTime );
 	savefile->WriteBool( weaponEnabled );
 	savefile->WriteBool( showWeaponViewModel );
@@ -1753,6 +2113,16 @@ void idPlayer::Save( idSaveGame *savefile ) const {
 	savefile->WriteBool( gibDeath );
 	savefile->WriteBool( gibsLaunched );
 	savefile->WriteVec3( gibsDir );
+
+	// DentonMod : Save the weapon zoom and projectile info --->
+	// Remeber the order of saving this info... cause last time I did a stupid mistake
+	weaponZoom_s flags = weaponZoom;			
+	LittleBitField( &flags, sizeof( flags ) ); 
+	savefile->Write( &flags, sizeof( flags ) );
+
+	for( i = 0; i < MAX_WEAPONS; i++ ) {
+		savefile->WriteByte( projectileType[ i ] );
+	} // <---
 
 	savefile->WriteFloat( zoomFov.GetStartTime() );
 	savefile->WriteFloat( zoomFov.GetDuration() );
@@ -1775,10 +2145,10 @@ void idPlayer::Save( idSaveGame *savefile ) const {
 
 	savefile->WriteObject( privateCameraView );
 
-	for( i = 0; i < NUM_LOGGED_VIEW_ANGLES; i++ ) {
+	for ( i = 0; i < NUM_LOGGED_VIEW_ANGLES; i++ ) {
 		savefile->WriteAngles( loggedViewAngles[ i ] );
 	}
-	for( i = 0; i < NUM_LOGGED_ACCELS; i++ ) {
+	for ( i = 0; i < NUM_LOGGED_ACCELS; i++ ) {
 		savefile->WriteInt( loggedAccel[ i ].time );
 		savefile->WriteVec3( loggedAccel[ i ].dir );
 	}
@@ -1822,6 +2192,30 @@ void idPlayer::Save( idSaveGame *savefile ) const {
 		hud->SetStateString( "message", common->GetLanguageDict()->GetString( "#str_02916" ) );
 		hud->HandleNamedEvent( "Message" );
 	}
+
+	savefile->WriteInt( weaponToggles.Num() );
+	for ( i = 0; i < weaponToggles.Num(); i++ ) {
+		WeaponToggle_t *weaponToggle = weaponToggles.GetIndex( i );
+		savefile->WriteString( weaponToggle->name );
+		savefile->WriteInt( weaponToggle->toggleList.Num() );
+		for ( int j = 0; j < weaponToggle->toggleList.Num(); j++ ) {
+			savefile->WriteInt( weaponToggle->toggleList[j] );
+		}
+	}
+	savefile->WriteObject( mountedObject );
+	enviroSuitLight.Save( savefile );
+	savefile->WriteBool( healthRecharge );
+	savefile->WriteInt( lastHealthRechargeTime );
+	savefile->WriteInt( rechargeSpeed );
+	savefile->WriteFloat( new_g_damageScale );
+
+	savefile->WriteBool( bloomEnabled );
+	savefile->WriteFloat( bloomSpeed );
+	savefile->WriteFloat( bloomIntensity );
+
+	// ability stuff
+	savefile->WriteInt( nextHealthRegen );
+	savefile->WriteInt( prevHeatlh );
 }
 
 /*
@@ -1873,9 +2267,19 @@ void idPlayer::Restore( idRestoreGame *savefile ) {
 	savefile->ReadUserInterface( objectiveSystem );
 	savefile->ReadBool( objectiveSystemOpen );
 
-	savefile->ReadInt( weapon_soulcube );
 	savefile->ReadInt( weapon_pda );
 	savefile->ReadInt( weapon_fists );
+	savefile->ReadInt( weapon_chainsaw );
+	savefile->ReadInt( weapon_soulcube );
+	savefile->ReadInt( weapon_bloodstone );
+	savefile->ReadInt( weapon_bloodstone_active1 );
+	savefile->ReadInt( weapon_bloodstone_active2 );
+	savefile->ReadInt( weapon_bloodstone_active3 );
+
+	savefile->ReadBool( harvest_lock );
+	savefile->ReadInt( hudPowerup );
+	savefile->ReadInt( lastHudPowerup );
+	savefile->ReadInt( hudPowerupDuration );
 
 	savefile->ReadInt( heartRate );
 
@@ -1943,7 +2347,7 @@ void idPlayer::Restore( idRestoreGame *savefile ) {
 	savefile->ReadInt( num );
 	aasLocation.SetGranularity( 1 );
 	aasLocation.SetNum( num );
-	for( i = 0; i < num; i++ ) {
+	for ( i = 0; i < num; i++ ) {
 		savefile->ReadInt( aasLocation[ i ].areaNum );
 		savefile->ReadVec3( aasLocation[ i ].pos );
 	}
@@ -1967,6 +2371,7 @@ void idPlayer::Restore( idRestoreGame *savefile ) {
 	savefile->ReadInt( currentWeapon );
 	savefile->ReadInt( idealWeapon );
 	savefile->ReadInt( previousWeapon );
+	savefile->ReadInt( quickWeapon );
 	savefile->ReadInt( weaponSwitchTime );
 	savefile->ReadBool( weaponEnabled );
 	savefile->ReadBool( showWeaponViewModel );
@@ -1985,6 +2390,15 @@ void idPlayer::Restore( idRestoreGame *savefile ) {
 	savefile->ReadBool( gibDeath );
 	savefile->ReadBool( gibsLaunched );
 	savefile->ReadVec3( gibsDir );
+
+	// DentonMod : Restore the weapon zoom and projectile info --->
+	// Remember the order of saving this info
+	savefile->Read( &weaponZoom, sizeof( weaponZoom ) );
+	LittleBitField( &weaponZoom, sizeof( weaponZoom ) );
+
+	for( i = 0; i < MAX_WEAPONS; i++ ) {
+		savefile->ReadByte( projectileType[ i ] );
+	} // <---
 
 	savefile->ReadFloat( set );
 	zoomFov.SetStartTime( set );
@@ -2009,36 +2423,35 @@ void idPlayer::Restore( idRestoreGame *savefile ) {
 	savefile->ReadFloat( influenceFov );
 	savefile->ReadInt( influenceActive );
 	savefile->ReadFloat( influenceRadius );
-	savefile->ReadObject( reinterpret_cast<idClass *&>( influenceEntity ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( influenceEntity ) );
 	savefile->ReadMaterial( influenceMaterial );
 	savefile->ReadSkin( influenceSkin );
 
-	savefile->ReadObject( reinterpret_cast<idClass *&>( privateCameraView ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( privateCameraView ) );
 
-	for( i = 0; i < NUM_LOGGED_VIEW_ANGLES; i++ ) {
+	for ( i = 0; i < NUM_LOGGED_VIEW_ANGLES; i++ ) {
 		savefile->ReadAngles( loggedViewAngles[ i ] );
 	}
-	for( i = 0; i < NUM_LOGGED_ACCELS; i++ ) {
+	for ( i = 0; i < NUM_LOGGED_ACCELS; i++ ) {
 		savefile->ReadInt( loggedAccel[ i ].time );
 		savefile->ReadVec3( loggedAccel[ i ].dir );
 	}
 	savefile->ReadInt( currentLoggedAccel );
 
-	savefile->ReadObject( reinterpret_cast<idClass *&>( focusGUIent ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( focusGUIent ) );
 	// can't save focusUI
 	focusUI = NULL;
-	savefile->ReadObject( reinterpret_cast<idClass *&>( focusCharacter ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( focusCharacter ) );
 	savefile->ReadInt( talkCursor );
 	savefile->ReadInt( focusTime );
-	savefile->ReadObject( reinterpret_cast<idClass *&>( focusVehicle ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( focusVehicle ) );
 	savefile->ReadUserInterface( cursor );
-
 	// DG: make it scale to 4:3 so crosshair looks properly round
 	//     yes, like so many scaling-related things this is a bit hacky
 	//     and note that this is special cased in StateChanged and you
 	//     can *not* generally set windowDef properties like this.
-	cursor->SetStateBool("scaleto43", true);
-	cursor->StateChanged(gameLocal.time); // DG end
+	cursor->SetStateBool( "scaleto43", true );
+	cursor->StateChanged( gameLocal.time ); // DG end
 
 	savefile->ReadInt( oldMouseX );
 	savefile->ReadInt( oldMouseY );
@@ -2065,9 +2478,9 @@ void idPlayer::Restore( idRestoreGame *savefile ) {
 	savefile->ReadInt( lastTeleFX );
 
 	// set the pm_ cvars
-	const idKeyValue	*kv;
+	const idKeyValue *kv;
 	kv = spawnArgs.MatchPrefix( "pm_", NULL );
-	while( kv ) {
+	while ( kv ) {
 		cvarSystem->SetCVarString( kv->GetKey(), kv->GetValue() );
 		kv = spawnArgs.MatchPrefix( "pm_", kv );
 	}
@@ -2077,6 +2490,40 @@ void idPlayer::Restore( idRestoreGame *savefile ) {
 
 	// create combat collision hull for exact collision detection
 	SetCombatModel();
+
+	int weaponToggleCount;
+	savefile->ReadInt( weaponToggleCount );
+	for ( i = 0; i < weaponToggleCount; i++ ) {
+		WeaponToggle_t newToggle;
+		memset( &newToggle, 0, sizeof( newToggle ) );
+
+		idStr name;
+		savefile->ReadString( name );
+		strcpy( newToggle.name, name.c_str() );
+
+		int indexCount;
+		savefile->ReadInt( indexCount );
+		for ( int j = 0; j < indexCount; j++ ) {
+			int temp;
+			savefile->ReadInt( temp );
+			newToggle.toggleList.Append( temp );
+		}
+		weaponToggles.Set( newToggle.name, newToggle );
+	}
+
+	savefile->ReadObject( reinterpret_cast<idClass*&>( mountedObject ) );
+	enviroSuitLight.Restore( savefile );
+	savefile->ReadBool( healthRecharge );
+	savefile->ReadInt( lastHealthRechargeTime );
+	savefile->ReadInt( rechargeSpeed );
+	savefile->ReadFloat( new_g_damageScale );
+
+	savefile->ReadBool( bloomEnabled );
+	savefile->ReadFloat( bloomSpeed );
+	savefile->ReadFloat( bloomIntensity );
+
+	savefile->ReadInt( nextHealthRegen );
+	savefile->ReadInt( prevHeatlh );
 
 	// DG: workaround for lingering messages that are shown forever after loading a savegame
 	//     (one way to get them is saving again, while the message from first save is still
@@ -2096,6 +2543,14 @@ void idPlayer::PrepareForRestart( void ) {
 	Spectate( true );
 	forceRespawn = true;
 
+	// Confirm reset hud states
+	DropFlag();
+
+	if ( hud ) {
+		hud->SetStateInt( "red_flagstatus", 0 );
+		hud->SetStateInt( "blue_flagstatus", 0 );
+	}
+
 	// we will be restarting program, clear the client entities from program-related things first
 	ShutdownThreads();
 
@@ -2113,6 +2568,8 @@ void idPlayer::Restart( void ) {
 
 	// client needs to setup the animation script object again
 	if ( gameLocal.isClient ) {
+		weapon = NULL;
+		enviroSuitLight = NULL;
 		Init();
 	} else {
 		// choose a random spot and prepare the point of view in case player is left spectating
@@ -2144,8 +2601,14 @@ void idPlayer::ServerSpectate( bool spectate ) {
 			}
 		}
 	}
+
 	if ( !spectate ) {
 		SpawnFromSpawnSpot();
+	}
+
+	// drop the flag if player was carrying it
+	if ( spectate && gameLocal.isMultiplayer && gameLocal.mpGame.IsGametypeFlagBased() && carryingFlag ) {
+		DropFlag();
 	}
 }
 
@@ -2355,7 +2818,7 @@ void idPlayer::UpdateSkinSetup( bool restart ) {
 	if ( restart ) {
 		team = ( idStr::Icmp( GetUserInfo()->GetString( "ui_team" ), "Blue" ) == 0 );
 	}
-	if ( gameLocal.gameType == GAME_TDM ) {
+	if ( gameLocal.mpGame.IsGametypeTeamBased() ) {
 		if ( team ) {
 			baseSkinName = "skins/characters/player/marine_mp_blue";
 		} else {
@@ -2382,12 +2845,23 @@ void idPlayer::UpdateSkinSetup( bool restart ) {
 		colorBarIndex = 3;
 	} else if ( baseSkinName.Find( "yellow" ) != -1 ) {
 		colorBarIndex = 4;
+	} else if ( baseSkinName.Find( "grey" ) != -1 ) {
+		colorBarIndex = 5;
+	} else if ( baseSkinName.Find( "purple" ) != -1 ) {
+		colorBarIndex = 6;
+	} else if ( baseSkinName.Find( "orange" ) != -1 ) {
+		colorBarIndex = 7;
 	} else {
 		colorBarIndex = 0;
 	}
 	colorBar = colorBarTable[ colorBarIndex ];
+
 	if ( PowerUpActive( BERSERK ) ) {
 		powerUpSkin = declManager->FindSkin( baseSkinName + "_berserk" );
+	} else
+
+	if ( PowerUpActive( INVULNERABILITY ) ) {
+		powerUpSkin = declManager->FindSkin( baseSkinName + "_invuln" );
 	}
 }
 
@@ -2401,10 +2875,10 @@ bool idPlayer::BalanceTDM( void ) {
 	idEntity	*ent;
 
 	teamCount[ 0 ] = teamCount[ 1 ] = 0;
-	for( i = 0; i < gameLocal.numClients; i++ ) {
+	for ( i = 0; i < gameLocal.numClients; i++ ) {
 		ent = gameLocal.entities[ i ];
 		if ( ent && ent->IsType( idPlayer::Type ) ) {
-			teamCount[ static_cast< idPlayer * >( ent )->team ]++;
+			teamCount[ static_cast<idPlayer*>( ent )->team ]++;
 		}
 	}
 	balanceTeam = -1;
@@ -2455,7 +2929,9 @@ bool idPlayer::UserInfoChanged( bool canModify ) {
 			}
 			wantSpectate = spec;
 		}
+
 	} else {
+
 		if ( canModify && spec ) {
 			userInfo->Set( "ui_spectate", "Play" );
 			modifiedInfo |= true;
@@ -2473,7 +2949,7 @@ bool idPlayer::UserInfoChanged( bool canModify ) {
 	ready = newready;
 	team = ( idStr::Icmp( userInfo->GetString( "ui_team" ), "Blue" ) == 0 );
 	// server maintains TDM balance
-	if ( canModify && gameLocal.gameType == GAME_TDM && !gameLocal.mpGame.IsInGame( entityNumber ) && g_balanceTDM.GetBool() ) {
+	if ( canModify && gameLocal.mpGame.IsGametypeTeamBased() && !gameLocal.mpGame.IsInGame( entityNumber ) && g_balanceTDM.GetBool() ) {
 		modifiedInfo |= BalanceTDM( );
 	}
 	UpdateSkinSetup( false );
@@ -2503,21 +2979,41 @@ void idPlayer::UpdateHudAmmo( idUserInterface *_hud ) {
 
 	inclip		= weapon.GetEntity()->AmmoInClip();
 	ammoamount	= weapon.GetEntity()->AmmoAvailable();
-	if ( ammoamount < 0 || !weapon.GetEntity()->IsReady() ) {
+
+	// Hack to stop the bloodstone ammo to display when it is being activated
+	if ( ammoamount < 0 || !weapon.GetEntity()->IsReady() || currentWeapon == weapon_bloodstone ) {
 		// show infinite ammo
 		_hud->SetStateString( "player_ammo", "" );
 		_hud->SetStateString( "player_totalammo", "" );
 	} else {
 		// show remaining ammo
-		_hud->SetStateString( "player_totalammo", va( "%i", ammoamount - inclip ) );
+		_hud->SetStateString( "player_totalammo", va( "%i", ammoamount ) );
 		_hud->SetStateString( "player_ammo", weapon.GetEntity()->ClipSize() ? va( "%i", inclip ) : "--" );		// how much in the current clip
 		_hud->SetStateString( "player_clips", weapon.GetEntity()->ClipSize() ? va( "%i", ammoamount / weapon.GetEntity()->ClipSize() ) : "--" );
-		_hud->SetStateString( "player_allammo", va( "%i/%i", inclip, ammoamount - inclip ) );
+
+		_hud->SetStateString( "player_allammo", va( "%i/%i", inclip, ammoamount ) );
 	}
 
 	_hud->SetStateBool( "player_ammo_empty", ( ammoamount == 0 ) );
 	_hud->SetStateBool( "player_clip_empty", ( weapon.GetEntity()->ClipSize() ? inclip == 0 : false ) );
 	_hud->SetStateBool( "player_clip_low", ( weapon.GetEntity()->ClipSize() ? inclip <= weapon.GetEntity()->LowAmmo() : false ) );
+
+	// Hack to stop the bloodstone ammo to display when it is being activated
+	if ( currentWeapon == weapon_bloodstone ) {
+		_hud->SetStateBool( "player_ammo_empty", false );
+		_hud->SetStateBool( "player_clip_empty", false );
+		_hud->SetStateBool( "player_clip_low", false );
+	}
+
+	// Let the HUD know the total amount of ammo regardless of the ammo required value
+	_hud->SetStateString( "player_ammo_count", va( "%i", weapon.GetEntity()->AmmoCount() ) );
+
+	// Make sure the hud always knows how many bloodstone charges there are
+	int ammoRequired;
+	ammo_t ammo_i = inventory.AmmoIndexForWeaponClass( "weapon_bloodstone_passive", &ammoRequired );
+	int bloodstoneAmmo = inventory.HasAmmo( ammo_i, ammoRequired );
+	_hud->SetStateString( "player_bloodstone_ammo", va( "%i", bloodstoneAmmo ) );
+	_hud->HandleNamedEvent( "bloodstoneAmmoUpdate" );
 
 	_hud->HandleNamedEvent( "updateAmmo" );
 }
@@ -2545,9 +3041,12 @@ void idPlayer::UpdateHudStats( idUserInterface *_hud ) {
 	_hud->SetStateInt( "player_stamina", staminapercentage );
 	_hud->SetStateInt( "player_armor", inventory.armor );
 	_hud->SetStateInt( "player_hr", heartRate );
+
 	_hud->SetStateInt( "player_nostamina", ( max_stamina == 0 ) ? 1 : 0 );
 
 	_hud->HandleNamedEvent( "updateArmorHealthAir" );
+
+	_hud->HandleNamedEvent( "updatePowerup" );
 
 	if ( healthPulse ) {
 		_hud->HandleNamedEvent( "healthPulse" );
@@ -2578,6 +3077,20 @@ void idPlayer::UpdateHudStats( idUserInterface *_hud ) {
 		inventory.armorPulse = false;
 	}
 
+	if ( gameLocal.mpGame.IsGametypeFlagBased() && _hud )
+	{
+		_hud->SetStateInt( "red_flagstatus", gameLocal.mpGame.GetFlagStatus( 0 ) );
+		_hud->SetStateInt( "blue_flagstatus", gameLocal.mpGame.GetFlagStatus( 1 ) );
+
+		_hud->SetStateInt( "red_team_score",  gameLocal.mpGame.GetFlagPoints( 0 ) );
+		_hud->SetStateInt( "blue_team_score", gameLocal.mpGame.GetFlagPoints( 1 ) );
+
+		_hud->HandleNamedEvent( "RedFlagStatusChange" );
+		_hud->HandleNamedEvent( "BlueFlagStatusChange" );
+	}
+
+	_hud->HandleNamedEvent( "selfTeam" );
+
 	UpdateHudAmmo( _hud );
 }
 
@@ -2591,7 +3104,7 @@ void idPlayer::UpdateHudWeapon( bool flashWeapon ) {
 
 	// if updating the hud of a followed client
 	if ( gameLocal.localClientNum >= 0 && gameLocal.entities[ gameLocal.localClientNum ] && gameLocal.entities[ gameLocal.localClientNum ]->IsType( idPlayer::Type ) ) {
-		idPlayer *p = static_cast< idPlayer * >( gameLocal.entities[ gameLocal.localClientNum ] );
+		idPlayer *p = static_cast<idPlayer*>( gameLocal.entities[ gameLocal.localClientNum ] );
 		if ( p->spectating && p->spectator == entityNumber ) {
 			assert( p->hud );
 			hud = p->hud;
@@ -2617,6 +3130,7 @@ void idPlayer::UpdateHudWeapon( bool flashWeapon ) {
 		}
 		hud->SetStateInt( hudWeap, weapstate );
 	}
+
 	if ( flashWeapon ) {
 		hud->HandleNamedEvent( "weaponChange" );
 	}
@@ -2628,7 +3142,6 @@ idPlayer::DrawHUD
 ===============
 */
 void idPlayer::DrawHUD( idUserInterface *_hud ) {
-
 	if ( !weapon.GetEntity() || influenceActive != INFLUENCE_NONE || privateCameraView || gameLocal.GetCamera() || !_hud || !g_showHud.GetBool() ) {
 		return;
 	}
@@ -2649,6 +3162,15 @@ void idPlayer::DrawHUD( idUserInterface *_hud ) {
 	// weapon targeting crosshair
 	if ( !GuiActive() ) {
 		if ( cursor && weapon.GetEntity()->ShowCrosshair() ) {
+
+			if ( weapon.GetEntity()->GetGrabberState() == 1 || weapon.GetEntity()->GetGrabberState() == 2 ) {
+				cursor->SetStateString( "grabbercursor", "1" );
+				cursor->SetStateString( "combatcursor", "0" );
+			} else {
+				cursor->SetStateString( "grabbercursor", "0" );
+				cursor->SetStateString( "combatcursor", "1" );
+			}
+
 			cursor->Redraw( gameLocal.realClientTime );
 		}
 	}
@@ -2660,9 +3182,15 @@ idPlayer::EnterCinematic
 ===============
 */
 void idPlayer::EnterCinematic( void ) {
+
+	if ( PowerUpActive( HELLTIME ) ) {
+		StopHelltime();
+	}
+
 	Hide();
 	StopAudioLog();
 	StopSound( SND_CHANNEL_PDA, false );
+
 	if ( hud ) {
 		hud->HandleNamedEvent( "radioChatterDown" );
 	}
@@ -2710,6 +3238,13 @@ void idPlayer::ExitCinematic( void ) {
 		weapon.GetEntity()->ExitCinematic();
 	}
 
+	// long cinematics would have surpassed the healthTakeTime, causing the player to take damage
+	// immediately after the cinematic ends.  Instead we start the healthTake cooldown again once
+	// the cinematic ends.
+	if ( g_skill.GetInteger() == 3 ) {
+		nextHealthTake = gameLocal.time + g_healthTakeTime.GetInteger() * 1000;
+	}
+
 	SetState( "ExitCinematic" );
 	UpdateScript();
 }
@@ -2720,9 +3255,9 @@ idPlayer::UpdateConditions
 =====================
 */
 void idPlayer::UpdateConditions( void ) {
-	idVec3	velocity;
 	float	forwardspeed;
 	float	sidespeed;
+	idVec3	velocity;
 
 	// minus the push velocity to avoid playing the walking animation and sounds when riding a mover
 	velocity = physicsObj.GetLinearVelocity() - physicsObj.GetPushedLinearVelocity();
@@ -2757,7 +3292,7 @@ void idPlayer::UpdateConditions( void ) {
 
 /*
 ==================
-WeaponFireFeedback
+idPlayer::WeaponFireFeedback
 
 Called when a weapon fires, generates head twitches, etc
 ==================
@@ -2782,6 +3317,7 @@ void idPlayer::StopFiring( void ) {
 	AI_ATTACK_HELD	= false;
 	AI_WEAPON_FIRED = false;
 	AI_RELOAD		= false;
+
 	if ( weapon.GetEntity() ) {
 		weapon.GetEntity()->EndAttack();
 	}
@@ -2790,6 +3326,8 @@ void idPlayer::StopFiring( void ) {
 /*
 ===============
 idPlayer::FireWeapon
+
+ * modified from DentonMod
 ===============
 */
 void idPlayer::FireWeapon( void ) {
@@ -2808,15 +3346,32 @@ void idPlayer::FireWeapon( void ) {
 	}
 
 	if ( !hiddenWeapon && weapon.GetEntity()->IsReady() ) {
+
+		if ( ( weapon_soulcube >= 0 ) && ( currentWeapon == weapon_soulcube ) && currentWeapon == idealWeapon ) {
+			if ( hud ) {
+				hud->HandleNamedEvent( "soulCubeNotReady" );
+			}
+			quickWeapon = weapon_soulcube; 
+			SelectWeapon( previousWeapon, false );
+		}
+
+		if ( ( weapon_bloodstone >= 0 ) && ( currentWeapon == weapon_bloodstone ) && inventory.weapons & ( 1 << weapon_bloodstone_active1 ) && weapon.GetEntity()->GetStatus() == WP_READY ) {
+				// tell it to switch to the previous weapon. Only do this once to prevent
+				// weapon toggling messing up the previous weapon
+				if ( idealWeapon == weapon_bloodstone ) {
+					if ( previousWeapon == weapon_bloodstone || previousWeapon == -1 ) {
+						NextBestWeapon();
+					} else {
+						// Since this is a toggle weapon just select itself and it will toggle to the last weapon
+						SelectWeapon( weapon_bloodstone, false );
+					}
+				}
+		}
+
+
 		if ( weapon.GetEntity()->AmmoInClip() || weapon.GetEntity()->AmmoAvailable() ) {
 			AI_ATTACK_HELD = true;
 			weapon.GetEntity()->BeginAttack();
-			if ( ( weapon_soulcube >= 0 ) && ( currentWeapon == weapon_soulcube ) ) {
-				if ( hud ) {
-					hud->HandleNamedEvent( "soulCubeNotReady" );
-				}
-				SelectWeapon( previousWeapon, false );
-			}
 		} else {
 			NextBestWeapon();
 		}
@@ -2848,7 +3403,7 @@ void idPlayer::CacheWeapons( void ) {
 		return;
 	}
 
-	for( w = 0; w < MAX_WEAPONS; w++ ) {
+	for ( w = 0; w < MAX_WEAPONS; w++ ) {
 		if ( inventory.weapons & ( 1 << w ) ) {
 			weap = spawnArgs.GetString( va( "def_weapon%d", w ) );
 			if ( weap != "" ) {
@@ -2910,22 +3465,42 @@ bool idPlayer::Give( const char *statname, const char *value ) {
 		if ( airTics > pm_airTics.GetInteger() ) {
 			airTics = pm_airTics.GetInteger();
 		}
+	} else if ( !idStr::Icmp( statname, "enviroTime" ) ) {
+		if ( PowerUpActive( ENVIROTIME ) ) {
+			inventory.powerupEndTime[ ENVIROTIME ] += ( atof( value ) * 1000 );
+		} else {
+			GivePowerUp( ENVIROTIME, atoi( value ) * 1000 );
+		}
+
 	} else {
-		return inventory.Give( this, spawnArgs, statname, value, &idealWeapon, true );
+		bool ret = inventory.Give( this, spawnArgs, statname, value, &idealWeapon, true );
+		if ( !idStr::Icmp( statname, "ammo_bloodstone" ) ) {
+			if ( hud ) {
+
+				// Force an update of the bloodstone ammount
+				int ammoRequired;
+				ammo_t ammo_i = inventory.AmmoIndexForWeaponClass( "weapon_bloodstone_passive", &ammoRequired );
+				int bloodstoneAmmo = inventory.HasAmmo( ammo_i, ammoRequired );
+				hud->SetStateString( "player_bloodstone_ammo", va( "%i", bloodstoneAmmo ) );
+
+				hud->HandleNamedEvent( "bloodstoneReady" );
+				// Make sure we unlock the ability to harvest
+				harvest_lock = false;
+			}
+		}
+		return ret;
 	}
 	return true;
 }
-
 
 /*
 ===============
 idPlayer::GiveHealthPool
 
-adds health to the player health pool
+Adds health to the player health pool
 ===============
 */
 void idPlayer::GiveHealthPool( float amt ) {
-
 	if ( AI_DEAD ) {
 		return;
 	}
@@ -2961,7 +3536,7 @@ bool idPlayer::GiveItem( idItem *item ) {
 
 	gave = false;
 	numPickup = inventory.pickupItemNames.Num();
-	for( i = 0; i < attr.GetNumKeyVals(); i++ ) {
+	for ( i = 0; i < attr.GetNumKeyVals(); i++ ) {
 		arg = attr.GetKeyVal( i );
 		if ( Give( arg->GetKey(), arg->GetValue() ) ) {
 			gave = true;
@@ -2979,7 +3554,7 @@ bool idPlayer::GiveItem( idItem *item ) {
 
 	// display the pickup feedback on the hud
 	if ( gave && ( numPickup == inventory.pickupItemNames.Num() ) ) {
-		inventory.AddPickupName( item->spawnArgs.GetString( "inv_name" ), item->spawnArgs.GetString( "inv_icon" ) );
+		inventory.AddPickupName( item->spawnArgs.GetString( "inv_name" ), item->spawnArgs.GetString( "inv_icon" ), this );
 	}
 
 	return gave;
@@ -2994,7 +3569,7 @@ float idPlayer::PowerUpModifier( int type ) {
 	float mod = 1.0f;
 
 	if ( PowerUpActive( BERSERK ) ) {
-		switch( type ) {
+		switch ( type ) {
 			case SPEED: {
 				mod *= 1.7f;
 				break;
@@ -3046,7 +3621,6 @@ bool idPlayer::GivePowerUp( int powerup, int time ) {
 	const char *skin;
 
 	if ( powerup >= 0 && powerup < MAX_POWERUPS ) {
-
 		if ( gameLocal.isServer ) {
 			idBitMsg	msg;
 			byte		msgBuf[MAX_EVENT_PARAM_SIZE];
@@ -3060,23 +3634,39 @@ bool idPlayer::GivePowerUp( int powerup, int time ) {
 		if ( powerup != MEGAHEALTH ) {
 			inventory.GivePowerUp( this, powerup, time );
 		}
-
+	
 		const idDeclEntityDef *def = NULL;
-
-		switch( powerup ) {
+		switch ( powerup ) {
 			case BERSERK: {
-				if ( spawnArgs.GetString( "snd_berserk_third", "", &sound ) ) {
-					StartSoundShader( declManager->FindSound( sound ), SND_CHANNEL_DEMONIC, 0, false, NULL );
+				if ( gameLocal.isMultiplayer && !gameLocal.isClient ) {
+					inventory.AddPickupName( "#str_00100627", "", this );
 				}
+
+				// if picked up play the screaming sound
+				if ( !weapon.GetEntity()->PowerupFromWeapon() ) {
+					if ( spawnArgs.GetString( "snd_berserk_third", "", &sound ) ) {
+						StartSoundShader( declManager->FindSound( sound ), SND_CHANNEL_DEMONIC, 0, false, NULL );
+					}
+				}
+
 				if ( baseSkinName.Length() ) {
 					powerUpSkin = declManager->FindSkin( baseSkinName + "_berserk" );
 				}
 				if ( !gameLocal.isClient ) {
-					idealWeapon = 0;
+					if ( weapon.GetEntity()->PowerupFromWeapon() ) {
+						// if used from bloodstone switch back to previous weapon
+						idealWeapon = previousWeapon;
+					} else {
+						// switch to fists when picked up
+						idealWeapon = weapon_fists;
+					}
 				}
 				break;
 			}
 			case INVISIBILITY: {
+				if ( gameLocal.isMultiplayer && !gameLocal.isClient ) {
+					inventory.AddPickupName( "#str_00100628", "", this );
+				}
 				spawnArgs.GetString( "skin_invisibility", "", &skin );
 				powerUpSkin = declManager->FindSkin( skin );
 				// remove any decals from the model
@@ -3092,10 +3682,14 @@ bool idPlayer::GivePowerUp( int powerup, int time ) {
 				break;
 			}
 			case ADRENALINE: {
+				inventory.AddPickupName( "#str_00100799", "", this );
 				stamina = 100.0f;
 				break;
 			 }
 			case MEGAHEALTH: {
+				if ( gameLocal.isMultiplayer && !gameLocal.isClient ) {
+					inventory.AddPickupName( "#str_00100629", "", this );
+				}
 				if ( spawnArgs.GetString( "snd_megahealth", "", &sound ) ) {
 					StartSoundShader( declManager->FindSound( sound ), SND_CHANNEL_ANY, 0, false, NULL );
 				}
@@ -3105,6 +3699,51 @@ bool idPlayer::GivePowerUp( int powerup, int time ) {
 				}
 				break;
 			 }
+			case HELLTIME: {
+				if ( spawnArgs.GetString( "snd_helltime_start", "", &sound ) ) {
+					PostEventMS( &EV_StartSoundShader, 0, sound, SND_CHANNEL_ANY );
+				}
+				if ( spawnArgs.GetString( "snd_helltime_loop", "", &sound ) ) {
+					PostEventMS( &EV_StartSoundShader, 0, sound, SND_CHANNEL_DEMONIC );
+				}
+				break;
+			}
+			case ENVIROSUIT: {
+				// Turn on the envirosuit sound
+				if ( gameSoundWorld ) {
+					gameSoundWorld->SetEnviroSuit( true );
+				}
+				// Put the helmet and lights on the player
+				const idDict *lightDef = gameLocal.FindEntityDefDict( "envirosuit_light", false );
+				if ( lightDef ) {
+					idEntity *temp;
+					gameLocal.SpawnEntityDef( *lightDef, &temp, false );
+					idLight *eLight = static_cast<idLight*>( temp );
+					eLight->GetPhysics()->SetOrigin( firstPersonViewOrigin );
+					eLight->UpdateVisuals();
+					eLight->Present();
+
+					enviroSuitLight = eLight;
+				}
+				break;
+			}
+			case ENVIROTIME: {
+				hudPowerup = ENVIROTIME;
+				// The HUD display bar is fixed at 60 seconds
+				hudPowerupDuration = 60000;
+				break;
+			}
+			case INVULNERABILITY: {
+				if ( gameLocal.isMultiplayer && !gameLocal.isClient ) {
+					inventory.AddPickupName( "#str_00100630", "", this );
+				}
+				if ( gameLocal.isMultiplayer ) {
+					if ( baseSkinName.Length() ) {
+						powerUpSkin = declManager->FindSkin( baseSkinName + "_invuln" );
+					}
+				}
+				break;
+			}
 		}
 
 		if ( hud ) {
@@ -3124,7 +3763,6 @@ idPlayer::ClearPowerup
 ==============
 */
 void idPlayer::ClearPowerup( int i ) {
-
 	if ( gameLocal.isServer ) {
 		idBitMsg	msg;
 		byte		msgBuf[MAX_EVENT_PARAM_SIZE];
@@ -3138,9 +3776,14 @@ void idPlayer::ClearPowerup( int i ) {
 	powerUpSkin = NULL;
 	inventory.powerups &= ~( 1 << i );
 	inventory.powerupEndTime[ i ] = 0;
-	switch( i ) {
+	switch ( i ) {
 		case BERSERK: {
-			StopSound( SND_CHANNEL_DEMONIC, false );
+			if ( !weapon.GetEntity()-> PowerupFromWeapon() ) {
+				// stop the screaming if berserk is from a pickup
+				StopSound( SND_CHANNEL_DEMONIC, false );
+			} else {
+				StopHealthRecharge();
+			}
 			break;
 		}
 		case INVISIBILITY: {
@@ -3148,6 +3791,31 @@ void idPlayer::ClearPowerup( int i ) {
 				weapon.GetEntity()->UpdateSkin();
 			}
 			break;
+		}
+		case HELLTIME: {
+			StopSound( SND_CHANNEL_DEMONIC, false );
+			break;
+		}
+		case ENVIROSUIT: {
+
+			hudPowerup = -1;
+
+			// Turn off the envirosuit sound
+			if ( gameSoundWorld ) {
+				gameSoundWorld->SetEnviroSuit( false );
+			}
+
+			// Take off the helmet and lights
+			if ( enviroSuitLight.IsValid() ) {
+				enviroSuitLight.GetEntity()->PostEventMS( &EV_Remove, 0 );
+			}
+			enviroSuitLight = NULL;
+			break;
+		}
+		case INVULNERABILITY: {
+			if ( gameLocal.isMultiplayer ) {
+				StopSound( SND_CHANNEL_DEMONIC, false );
+			}
 		}
 	}
 }
@@ -3162,6 +3830,36 @@ void idPlayer::UpdatePowerUps( void ) {
 
 	if ( !gameLocal.isClient ) {
 		for ( i = 0; i < MAX_POWERUPS; i++ ) {
+			if ( ( inventory.powerups & ( 1 << i ) ) && inventory.powerupEndTime[i] > gameLocal.time ) {
+				switch ( i ) {
+					case ENVIROSUIT: {
+						if ( enviroSuitLight.IsValid() ) {
+							idAngles lightAng = firstPersonViewAxis.ToAngles();
+							idVec3 lightOrg = firstPersonViewOrigin;
+							const idDict *lightDef = gameLocal.FindEntityDefDict( "envirosuit_light", false );
+
+							idVec3 enviroOffset = lightDef->GetVector( "enviro_offset" );
+							idVec3 enviroAngleOffset = lightDef->GetVector( "enviro_angle_offset" );
+
+							lightOrg += ( enviroOffset.x * firstPersonViewAxis[0] );
+							lightOrg += ( enviroOffset.y * firstPersonViewAxis[1] );
+							lightOrg += ( enviroOffset.z * firstPersonViewAxis[2] );
+							lightAng.pitch += enviroAngleOffset.x;
+							lightAng.yaw += enviroAngleOffset.y;
+							lightAng.roll += enviroAngleOffset.z;
+
+							enviroSuitLight.GetEntity()->GetPhysics()->SetOrigin( lightOrg );
+							enviroSuitLight.GetEntity()->GetPhysics()->SetAxis( lightAng.ToMat3() );
+							enviroSuitLight.GetEntity()->UpdateVisuals();
+							enviroSuitLight.GetEntity()->Present();
+						}
+						break;
+					}
+					default: {
+						break;
+					}
+				}
+			}
 			if ( PowerUpActive( i ) && inventory.powerupEndTime[i] <= gameLocal.time ) {
 				ClearPowerup( i );
 			}
@@ -3186,15 +3884,22 @@ void idPlayer::UpdatePowerUps( void ) {
 		} else {
 			healthPool -= amt;
 		}
-		nextHealthPulse = gameLocal.time + HEALTHPULSE_TIME;
-		healthPulse = true;
+		if ( healthPool < 1.0f ) {
+			healthPool = 0.0f;
+		} else {
+			nextHealthPulse = gameLocal.time + HEALTHPULSE_TIME;
+			healthPulse = true;
+		}
 	}
 
 	if ( !gameLocal.inCinematic && influenceActive == 0 && g_skill.GetInteger() == 3 && gameLocal.time > nextHealthTake && !AI_DEAD && health > g_healthTakeLimit.GetInteger() ) {
 		assert( !gameLocal.isClient );	// healthPool never be set on client
-		health -= g_healthTakeAmt.GetInteger();
-		if ( health < g_healthTakeLimit.GetInteger() ) {
-			health = g_healthTakeLimit.GetInteger();
+
+		if ( !PowerUpActive( INVULNERABILITY ) ) {
+			health -= g_healthTakeAmt.GetInteger();
+			if ( health < g_healthTakeLimit.GetInteger() ) {
+				health = g_healthTakeLimit.GetInteger();
+			}
 		}
 		nextHealthTake = gameLocal.time + g_healthTakeTime.GetInteger() * 1000;
 		healthTake = true;
@@ -3208,12 +3913,19 @@ idPlayer::ClearPowerUps
 */
 void idPlayer::ClearPowerUps( void ) {
 	int i;
+
 	for ( i = 0; i < MAX_POWERUPS; i++ ) {
 		if ( PowerUpActive( i ) ) {
 			ClearPowerup( i );
 		}
 	}
 	inventory.ClearPowerUps();
+
+	if ( gameLocal.isMultiplayer ) {
+		if ( enviroSuitLight.IsValid() ) {
+			enviroSuitLight.GetEntity()->PostEventMS( &EV_Remove, 0 );
+		}
+	}
 }
 
 /*
@@ -3227,7 +3939,7 @@ bool idPlayer::GiveInventoryItem( idDict *item ) {
 	}
 	inventory.items.Append( new idDict( *item ) );
 	idItemInfo info;
-	const char* itemName = item->GetString( "inv_name" );
+	const char *itemName = item->GetString( "inv_name" );
 	if ( idStr::Cmpn( itemName, STRTABLE_ID, STRTABLE_ID_LENGTH ) == 0 ) {
 		info.name = common->GetLanguageDict()->GetString( itemName );
 	} else {
@@ -3239,6 +3951,35 @@ bool idPlayer::GiveInventoryItem( idDict *item ) {
 		hud->SetStateString( "itemicon", info.icon );
 		hud->HandleNamedEvent( "invPickup" );
 	}
+
+	// Added to support powercells
+	if ( item->GetInt( "inv_powercell" ) && focusUI ) {
+		// Reset the powercell count
+		int powerCellCount = 0;
+		for ( int j = 0; j < inventory.items.Num(); j++ ) {
+			idDict *item = inventory.items[ j ];
+			if ( item->GetInt( "inv_powercell" ) ) {
+				powerCellCount++;
+			}
+		}
+		focusUI->SetStateInt( "powercell_count", powerCellCount );
+	}
+	return true;
+}
+
+/*
+==============
+idPlayer::GiveInventoryItem
+
+BSM: Implementing this defined function for scripted give inventory items
+==============
+*/
+bool idPlayer::GiveInventoryItem( const char *name ) {
+	idDict args;
+
+	args.Set( "classname", name );
+	args.Set( "owner", this->name.c_str() );
+	gameLocal.SpawnEntityDef( args );
 	return true;
 }
 
@@ -3251,6 +3992,7 @@ void idPlayer::UpdateObjectiveInfo( void ) {
 	if ( objectiveSystem == NULL ) {
 		return;
 	}
+
 	objectiveSystem->SetStateString( "objective1", "" );
 	objectiveSystem->SetStateString( "objective2", "" );
 	objectiveSystem->SetStateString( "objective3", "" );
@@ -3288,7 +4030,7 @@ idPlayer::CompleteObjective
 void idPlayer::CompleteObjective( const char *title ) {
 	int c = inventory.objectiveNames.Num();
 	for ( int i = 0;  i < c; i++ ) {
-		if ( idStr::Icmp(inventory.objectiveNames[i].title, title) == 0 ) {
+		if ( idStr::Icmp( inventory.objectiveNames[i].title, title ) == 0 ) {
 			inventory.objectiveNames.RemoveIndex( i );
 			break;
 		}
@@ -3307,13 +4049,13 @@ idPlayer::GiveVideo
 */
 void idPlayer::GiveVideo( const char *videoName, idDict *item ) {
 
-	if ( videoName == NULL || *videoName == 0 ) {
+	if ( videoName == NULL || *videoName == '\0' ) {
 		return;
 	}
 
 	inventory.videos.AddUnique( videoName );
 
-	if ( item ) {
+	if ( item  != NULL ) {
 		idItemInfo info;
 		info.name = item->GetString( "inv_name" );
 		info.icon = item->GetString( "inv_icon" );
@@ -3344,7 +4086,7 @@ idPlayer::GiveEmail
 */
 void idPlayer::GiveEmail( const char *emailName ) {
 
-	if ( emailName == NULL || *emailName == 0 ) {
+	if ( emailName == NULL || *emailName == '\0' ) {
 		return;
 	}
 
@@ -3361,8 +4103,8 @@ void idPlayer::GiveEmail( const char *emailName ) {
 idPlayer::GivePDA
 ===============
 */
-void idPlayer::GivePDA( const char *pdaName, idDict *item )
-{
+void idPlayer::GivePDA( const char *pdaName, idDict *item ) {
+
 	if ( gameLocal.isMultiplayer && spectating ) {
 		return;
 	}
@@ -3371,18 +4113,18 @@ void idPlayer::GivePDA( const char *pdaName, idDict *item )
 		inventory.pdaSecurity.AddUnique( item->GetString( "inv_name" ) );
 	}
 
-	if ( pdaName == NULL || *pdaName == 0 ) {
+	if ( pdaName == NULL || *pdaName == '\0' ) {
 		pdaName = "personal";
 	}
 
-	const idDeclPDA *pda = static_cast< const idDeclPDA* >( declManager->FindType( DECL_PDA, pdaName ) );
+	const idDeclPDA *pda = static_cast<const idDeclPDA* >( declManager->FindType( DECL_PDA, pdaName ) );
 
 	inventory.pdas.AddUnique( pdaName );
 
 	// Copy any videos over
 	for ( int i = 0; i < pda->GetNumVideos(); i++ ) {
 		const idDeclVideo *video = pda->GetVideoByIndex( i );
-		if ( video ) {
+		if ( video != NULL ) {
 			inventory.videos.AddUnique( video->GetName() );
 		}
 	}
@@ -3406,7 +4148,6 @@ void idPlayer::GivePDA( const char *pdaName, idDict *item )
 				TogglePDA();
 			}
 			objectiveSystem->HandleNamedEvent( "showPDATip" );
-			//ShowTip( spawnArgs.GetString( "text_infoTitle" ), spawnArgs.GetString( "text_firstPDA" ), true );
 		}
 
 		if ( inventory.pdas.Num() > 1 && pda->GetNumVideos() > 0 && hud ) {
@@ -3423,7 +4164,7 @@ idPlayer::FindInventoryItem
 idDict *idPlayer::FindInventoryItem( const char *name ) {
 	for ( int i = 0; i < inventory.items.Num(); i++ ) {
 		const char *iname = inventory.items[i]->GetString( "inv_name" );
-		if ( iname && *iname ) {
+		if ( iname != NULL && *iname != '\0' ) {
 			if ( idStr::Icmp( name, iname ) == 0 ) {
 				return inventory.items[i];
 			}
@@ -3438,7 +4179,11 @@ idPlayer::RemoveInventoryItem
 ===============
 */
 void idPlayer::RemoveInventoryItem( const char *name ) {
-	idDict *item = FindInventoryItem(name);
+	// Hack for localization
+	if ( !idStr::Icmp( name, "Pwr Cell" ) ) {
+		name = common->GetLanguageDict()->GetString( "#str_00101056" );
+	}
+	idDict *item = FindInventoryItem( name );
 	if ( item ) {
 		RemoveInventoryItem( item );
 	}
@@ -3451,6 +4196,20 @@ idPlayer::RemoveInventoryItem
 */
 void idPlayer::RemoveInventoryItem( idDict *item ) {
 	inventory.items.Remove( item );
+
+	// Added to support powercells
+	if ( item->GetInt( "inv_powercell" ) && focusUI ) {
+		// Reset the powercell count
+		int powerCellCount = 0;
+		for ( int j = 0; j < inventory.items.Num(); j++ ) {
+			idDict *item = inventory.items[ j ];
+			if ( item->GetInt( "inv_powercell" ) ) {
+				powerCellCount++;
+			}
+		}
+		focusUI->SetStateInt( "powercell_count", powerCellCount );
+	}
+
 	delete item;
 }
 
@@ -3478,7 +4237,7 @@ idPlayer::SlotForWeapon
 int idPlayer::SlotForWeapon( const char *weaponName ) {
 	int i;
 
-	for( i = 0; i < MAX_WEAPONS; i++ ) {
+	for ( i = 0; i < MAX_WEAPONS; i++ ) {
 		const char *weap = spawnArgs.GetString( va( "def_weapon%d", i ) );
 		if ( !idStr::Cmp( weap, weaponName ) ) {
 			return i;
@@ -3495,6 +4254,7 @@ idPlayer::Reload
 ===============
 */
 void idPlayer::Reload( void ) {
+
 	if ( gameLocal.isClient ) {
 		return;
 	}
@@ -3508,30 +4268,67 @@ void idPlayer::Reload( void ) {
 	}
 }
 
+// DentonMod --->
+/*
+===============
+idPlayer::WeaponSpecialFunction 
+===============
+*/
+void idPlayer::WeaponSpecialFunction( bool keyTapped ) {
+
+	if ( gameLocal.isClient ) {
+		return;
+	}
+
+	if ( spectating || gameLocal.inCinematic || influenceActive ) {
+		return;
+	}
+
+	if ( !hiddenWeapon && weapon.GetEntity() && weapon.GetEntity()->IsLinked() ) {
+		weapon.GetEntity()->BeginSpecialFunction( keyTapped );
+	}
+}
+// <---
+
 /*
 ===============
 idPlayer::NextBestWeapon
 ===============
 */
 void idPlayer::NextBestWeapon( void ) {
-	const char *weap;
-	int w = MAX_WEAPONS;
+	const char* weap;
+	int	w = MAX_WEAPONS;
 
-	if ( gameLocal.isClient || !weaponEnabled ) {
+	if ( gameLocal.isClient || !weaponEnabled || currentWeapon != idealWeapon ) {
 		return;
 	}
 
 	while ( w > 0 ) {
 		w--;
 		weap = spawnArgs.GetString( va( "def_weapon%d", w ) );
-		if ( !weap[ 0 ] || ( ( inventory.weapons & ( 1 << w ) ) == 0 ) || ( !inventory.HasAmmo( weap ) ) ) {
+		if ( !weap[ 0 ] || ( ( inventory.weapons & ( 1 << w ) ) == 0 ) || ( !inventory.HasAmmo( weap, true, this ) ) ) {
 			continue;
 		}
 		if ( !spawnArgs.GetBool( va( "weapon%d_best", w ) ) ) {
 			continue;
 		}
+
+		// Some weapons will report having ammo but the clip is empty and
+		// will not have enough to fill the clip (i.e. Double Barrel Shotgun with 1 round left)
+		// We need to skip these weapons because they cannot be used
+		if ( inventory.HasEmptyClipCannotRefill( weap, this ) ) {
+			continue;
+		}
 		break;
 	}
+
+	
+	// DentonMod --->
+	if  ( w != idealWeapon )  {
+		quickWeapon = idealWeapon;
+	} 
+	// <---
+
 	idealWeapon = w;
 	weaponSwitchTime = gameLocal.time + WEAPON_SWITCH_DELAY;
 	UpdateHudWeapon();
@@ -3560,22 +4357,32 @@ void idPlayer::NextWeapon( void ) {
 	}
 
 	w = idealWeapon;
-	while( 1 ) {
+	while ( 1 ) {
 		w++;
 		if ( w >= MAX_WEAPONS ) {
 			w = 0;
 		}
+
+		// does this break quickweapon ???
+		if ( w == idealWeapon ) {
+			w = weapon_fists;
+			break;
+		}
+
 		weap = spawnArgs.GetString( va( "def_weapon%d", w ) );
 		if ( !spawnArgs.GetBool( va( "weapon%d_cycle", w ) ) ) {
 			continue;
 		}
+
 		if ( !weap[ 0 ] ) {
 			continue;
 		}
+
 		if ( ( inventory.weapons & ( 1 << w ) ) == 0 ) {
 			continue;
 		}
-		if ( inventory.HasAmmo( weap ) ) {
+
+		if ( inventory.HasAmmo( weap, true, this ) || w == weapon_bloodstone ) {
 			break;
 		}
 	}
@@ -3610,11 +4417,18 @@ void idPlayer::PrevWeapon( void ) {
 	}
 
 	w = idealWeapon;
-	while( 1 ) {
+	while ( 1 ) {
 		w--;
 		if ( w < 0 ) {
 			w = MAX_WEAPONS - 1;
 		}
+
+		// does this break quickweapon ???
+		if ( w == idealWeapon ) {
+			w = weapon_fists;
+			break;
+		}
+
 		weap = spawnArgs.GetString( va( "def_weapon%d", w ) );
 		if ( !spawnArgs.GetBool( va( "weapon%d_cycle", w ) ) ) {
 			continue;
@@ -3622,10 +4436,12 @@ void idPlayer::PrevWeapon( void ) {
 		if ( !weap[ 0 ] ) {
 			continue;
 		}
+
 		if ( ( inventory.weapons & ( 1 << w ) ) == 0 ) {
 			continue;
 		}
-		if ( inventory.HasAmmo( weap ) ) {
+
+		if ( inventory.HasAmmo( weap, true, this ) || w == weapon_bloodstone ) {
 			break;
 		}
 	}
@@ -3640,9 +4456,11 @@ void idPlayer::PrevWeapon( void ) {
 /*
 ===============
 idPlayer::SelectWeapon
+
+ * modified from DentonMod
 ===============
 */
-void idPlayer::SelectWeapon( int num, bool force ) {
+void idPlayer::SelectWeapon( int num, bool force, const bool toggleWeapons ) {
 	const char *weap;
 
 	if ( !weaponEnabled || spectating || gameLocal.inCinematic || health < 0 ) {
@@ -3673,13 +4491,55 @@ void idPlayer::SelectWeapon( int num, bool force ) {
 		return;
 	}
 
+	// Is the weapon a toggle weapon
+	 //Is the weapon a toggle weapon & player is trying to select it.
+	WeaponToggle_t *weaponToggle;
+	if (weaponToggles.Get(va("weapontoggle%d", num), &weaponToggle) && toggleWeapons ) {
+		int weaponToggleIndex = 0;
+
+		// Find the current Weapon in the list
+		int currentIndex = -1;
+		for ( int i = 0; i < weaponToggle->toggleList.Num(); i++ ) {
+			if ( weaponToggle->toggleList[i] == idealWeapon ) {
+				currentIndex = i;
+				break;
+			}
+		}
+		if ( currentIndex == -1 ) {
+			// Didn't find the current weapon so select the first item
+			weaponToggleIndex = 0;
+		} else {
+			// Roll to the next available item in the list
+			weaponToggleIndex = currentIndex;
+			weaponToggleIndex++;
+			if ( weaponToggleIndex >= weaponToggle->toggleList.Num() ) {
+				weaponToggleIndex = 0;
+			}
+		}
+
+		for ( int i = 0; i < weaponToggle->toggleList.Num(); i++ ) {
+
+			// Is it available
+			if ( inventory.weapons & ( 1 << weaponToggle->toggleList[weaponToggleIndex] ) ) {
+				break;
+			}
+
+			weaponToggleIndex++;
+			if ( weaponToggleIndex >= weaponToggle->toggleList.Num() ) {
+				weaponToggleIndex = 0;
+			}
+		}
+
+		num = weaponToggle->toggleList[weaponToggleIndex];
+	}
+
 	if ( force || ( inventory.weapons & ( 1 << num ) ) ) {
-		if ( !inventory.HasAmmo( weap ) && !spawnArgs.GetBool( va( "weapon%d_allowempty", num ) ) ) {
+		if ( !inventory.HasAmmo( weap, true, this ) && !spawnArgs.GetBool( va( "weapon%d_allowempty", num ) ) ) {
 			return;
 		}
 		if ( ( previousWeapon >= 0 ) && ( idealWeapon == num ) && ( spawnArgs.GetBool( va( "weapon%d_toggle", num ) ) ) ) {
 			weap = spawnArgs.GetString( va( "def_weapon%d", previousWeapon ) );
-			if ( !inventory.HasAmmo( weap ) && !spawnArgs.GetBool( va( "weapon%d_allowempty", previousWeapon ) ) ) {
+			if ( !inventory.HasAmmo( weap, true, this ) && !spawnArgs.GetBool( va( "weapon%d_allowempty", previousWeapon ) ) ) {
 				return;
 			}
 			idealWeapon = previousWeapon;
@@ -3702,6 +4562,10 @@ void idPlayer::DropWeapon( bool died ) {
 	idVec3 forward, up;
 	int inclip, ammoavailable;
 
+	if ( died == false ) {
+		return;
+	}
+
 	assert( !gameLocal.isClient );
 
 	if ( spectating || weaponGone || weapon.GetEntity() == NULL ) {
@@ -3721,11 +4585,15 @@ void idPlayer::DropWeapon( bool died ) {
 		return;
 	}
 
+	ammoavailable += inclip;
+
 	// expect an ammo setup that makes sense before doing any dropping
 	// ammoavailable is -1 for infinite ammo, and weapons like chainsaw
 	// a bad ammo config usually indicates a bad weapon state, so we should not drop
 	// used to be an assertion check, but it still happens in edge cases
-	if ( ( ammoavailable != -1 ) && ( ammoavailable - inclip < 0 ) ) {
+
+//	if ( ( ammoavailable != -1 ) && ( ammoavailable < 0 ) ) {
+	if ( ( ammoavailable != -1 ) && ( ammoavailable - inclip < 0 ) ) {	// this is from DentonMod ( check if it's in D3XP or DentonExclusive
 		common->DPrintf( "idPlayer::DropWeapon: bad ammo setup\n" );
 		return;
 	}
@@ -3746,6 +4614,7 @@ void idPlayer::DropWeapon( bool died ) {
 		item->spawnArgs.SetInt( keyval->GetKey(), ammoavailable );
 		idStr inclipKey = keyval->GetKey();
 		inclipKey.Insert( "inclip_", 4 );
+		inclipKey.Insert( va( "%.2d", currentWeapon ), 11 );
 		item->spawnArgs.SetInt( inclipKey, inclip );
 	}
 	if ( !died ) {
@@ -3761,14 +4630,15 @@ void idPlayer::DropWeapon( bool died ) {
 /*
 =================
 idPlayer::StealWeapon
-steal the target player's current weapon
+
+Steal the target player's current weapon
 =================
 */
 void idPlayer::StealWeapon( idPlayer *player ) {
 	assert( !gameLocal.isClient );
 
 	// make sure there's something to steal
-	idWeapon *player_weapon = static_cast< idWeapon * >( player->weapon.GetEntity() );
+	idWeapon *player_weapon = static_cast<idWeapon*>( player->weapon.GetEntity() );
 	if ( !player_weapon || !player_weapon->CanDrop() || weaponGone ) {
 		return;
 	}
@@ -3785,7 +4655,11 @@ void idPlayer::StealWeapon( idPlayer *player ) {
 	assert( weapon_classname );
 	int ammoavailable = player->weapon.GetEntity()->AmmoAvailable();
 	int inclip = player->weapon.GetEntity()->AmmoInClip();
-	if ( ( ammoavailable != -1 ) && ( ammoavailable - inclip < 0 ) ) {
+
+	ammoavailable += inclip;
+
+//	if ( ( ammoavailable != -1 ) && ( ammoavailable < 0 ) ) {
+	if ( ( ammoavailable != -1 ) && ( ammoavailable - inclip < 0 ) ) {	// same here as above
 		// see DropWeapon
 		common->DPrintf( "idPlayer::StealWeapon: bad ammo setup\n" );
 		// we still steal the weapon, so let's use the default ammo levels
@@ -3809,7 +4683,7 @@ void idPlayer::StealWeapon( idPlayer *player ) {
 	ammo_t ammo_i = player->inventory.AmmoIndexForWeaponClass( weapon_classname, NULL );
 	idealWeapon = newweap;
 	inventory.ammo[ ammo_i ] += ammoavailable;
-	inventory.clip[ newweap ] = inclip;
+	inventory.clip[newweap] = inclip;
 }
 
 /*
@@ -3828,6 +4702,8 @@ idUserInterface *idPlayer::ActiveGui( void ) {
 /*
 ===============
 idPlayer::Weapon_Combat
+
+ * modified from DentonMod
 ===============
 */
 void idPlayer::Weapon_Combat( void ) {
@@ -3850,7 +4726,7 @@ void idPlayer::Weapon_Combat( void ) {
 		idealWeapon = currentWeapon;
 	}
 
-	if ( idealWeapon != currentWeapon ) {
+	if (  idealWeapon != currentWeapon ) {
 		if ( weaponCatchup ) {
 			assert( gameLocal.isClient );
 
@@ -3888,12 +4764,24 @@ void idPlayer::Weapon_Combat( void ) {
 				weapon.GetEntity()->Raise();
 			}
 		}
+
 	} else {
+
 		weaponGone = false;	// if you drop and re-get weap, you may miss the = false above
 		if ( weapon.GetEntity()->IsHolstered() ) {
 			if ( !weapon.GetEntity()->AmmoAvailable() ) {
-				// weapons can switch automatically if they have no more ammo
-				NextBestWeapon();
+				// If weapon with no ammo is soulcube, switch to previous weapon	
+				if ( ( weapon_soulcube >= 0 ) && ( currentWeapon == weapon_soulcube ) && currentWeapon == idealWeapon ) {
+					if ( hud ) {
+						hud->HandleNamedEvent( "soulCubeNotReady" );
+					}
+					quickWeapon = weapon_soulcube; 
+					SelectWeapon( previousWeapon, false );
+				} else {
+					// weapons can switch automatically if they have no more ammo
+					NextBestWeapon();
+				}
+
 			} else {
 				weapon.GetEntity()->Raise();
 				state = GetScriptFunction( "RaiseWeapon" );
@@ -3913,6 +4801,14 @@ void idPlayer::Weapon_Combat( void ) {
 			AI_ATTACK_HELD = false;
 			weapon.GetEntity()->EndAttack();
 		}
+	}
+
+	// check for Weapon special function
+	if ( ( usercmd.buttons & BUTTON_5 ) && !weaponGone ) {  // BUTTON_5 is being used for weapon special function 
+		WeaponSpecialFunction( !( oldButtons & BUTTON_5 ) );	// The condition holds True when key is being tapped rather than held
+	}
+	else if ( oldButtons & BUTTON_5 ) {
+		weapon.GetEntity()->EndSpecialFunction();
 	}
 
 	// update our ammo clip in our inventory
@@ -3990,7 +4886,6 @@ idPlayer::Weapon_GUI
 ===============
 */
 void idPlayer::Weapon_GUI( void ) {
-
 	if ( !objectiveSystemOpen ) {
 		if ( idealWeapon != currentWeapon ) {
 			Weapon_Combat();
@@ -4021,6 +4916,7 @@ void idPlayer::Weapon_GUI( void ) {
 			// we predict enough, but don't want to execute commands
 			return;
 		}
+
 		if ( focusGUIent ) {
 			HandleGuiCommands( focusGUIent, command );
 		} else {
@@ -4099,7 +4995,7 @@ void idPlayer::SpectateFreeFly( bool force ) {
 	player = gameLocal.GetClientByNum( spectator );
 	if ( force || gameLocal.time > lastSpectateChange ) {
 		spectator = entityNumber;
-		if ( player && player != this && !player->spectating && !player->IsInTeleport() ) {
+		if ( player != NULL && player != this && !player->spectating && !player->IsInTeleport() ) {
 			newOrig = player->GetPhysics()->GetOrigin();
 			if ( player->physicsObj.IsCrouching() ) {
 				newOrig[ 2 ] += pm_crouchviewheight.GetFloat();
@@ -4157,17 +5053,21 @@ idPlayer::UpdateSpectating
 ===============
 */
 void idPlayer::UpdateSpectating( void ) {
+	idPlayer *player;
+
 	assert( spectating );
 	assert( !gameLocal.isClient );
 	assert( IsHidden() );
-	idPlayer *player;
+
 	if ( !gameLocal.isMultiplayer ) {
 		return;
 	}
+
 	player = gameLocal.GetClientByNum( spectator );
 	if ( !player || ( player->spectating && player != this ) ) {
 		SpectateFreeFly( true );
-	} else if ( usercmd.upmove > 0 ) {
+	} else if ( usercmd.upmove > 0 && player && player != this ) {
+		// following someone and hit jump? release
 		SpectateFreeFly( false );
 	} else if ( usercmd.buttons & BUTTON_ATTACK ) {
 		SpectateCycle();
@@ -4200,6 +5100,7 @@ bool idPlayer::HandleSingleGuiCommand( idEntity *entityGui, idLexer *src ) {
 				entityGui->GetRenderEntity()->gui[ 0 ]->SetStateInt( "gui_parm1", _health );
 			}
 			health += amt;
+			prevHeatlh = health;	// sikk - Health Management System (Health Regen)
 			if ( health > 100 ) {
 				health = 100;
 			}
@@ -4241,7 +5142,7 @@ bool idPlayer::HandleSingleGuiCommand( idEntity *entityGui, idLexer *src ) {
 			if ( mat ) {
 				int c = mat->GetNumStages();
 				for ( int i = 0; i < c; i++ ) {
-					const shaderStage_t *stage = mat->GetStage(i);
+					const shaderStage_t *stage = mat->GetStage( i );
 					if ( stage && stage->texture.cinematic ) {
 						stage->texture.cinematic->ResetTime( gameLocal.time );
 					}
@@ -4268,7 +5169,6 @@ bool idPlayer::HandleSingleGuiCommand( idEntity *entityGui, idLexer *src ) {
 
 	if ( token.Icmp( "stoppdaaudio" ) == 0 ) {
 		if ( objectiveSystem && objectiveSystemOpen && pdaAudio.Length() > 0 ) {
-			// idSoundShader *shader = declManager->FindSound( pdaAudio );
 			StopAudioLog();
 			StopSound( SND_CHANNEL_PDA, false );
 		}
@@ -4287,7 +5187,7 @@ idPlayer::Collide
 bool idPlayer::Collide( const trace_t &collision, const idVec3 &velocity ) {
 	idEntity *other;
 
-	if ( gameLocal.isClient ) {
+	if ( gameLocal.isClient && spectating == false ) {
 		return false;
 	}
 
@@ -4395,7 +5295,7 @@ void idPlayer::UpdateFocus( void ) {
 	}
 
 	start = GetEyePosition();
-	end = start + viewAngles.ToForward() * 80.0f;
+	end = start + viewAngles.ToForward() * 60.0f;
 
 	// player identification -> names to the hud
 	if ( gameLocal.isMultiplayer && entityNumber == gameLocal.localClientNum ) {
@@ -4429,12 +5329,12 @@ void idPlayer::UpdateFocus( void ) {
 
 		if ( allowFocus ) {
 			if ( ent->IsType( idAFAttachment::Type ) ) {
-				idEntity *body = static_cast<idAFAttachment *>( ent )->GetBody();
-				if ( body && body->IsType( idAI::Type ) && ( static_cast<idAI *>( body )->GetTalkState() >= TALK_OK ) ) {
+				idEntity *body = static_cast<idAFAttachment*>( ent )->GetBody();
+				if ( body != NULL && body->IsType( idAI::Type ) && ( static_cast<idAI*>( body )->GetTalkState() >= TALK_OK ) ) {
 					gameLocal.clip.TracePoint( trace, start, end, MASK_SHOT_RENDERMODEL, this );
 					if ( ( trace.fraction < 1.0f ) && ( trace.c.entityNum == ent->entityNumber ) ) {
 						ClearFocus();
-						focusCharacter = static_cast<idAI *>( body );
+						focusCharacter = static_cast<idAI*>( body );
 						talkCursor = 1;
 						focusTime = gameLocal.time + FOCUS_TIME;
 						break;
@@ -4444,11 +5344,11 @@ void idPlayer::UpdateFocus( void ) {
 			}
 
 			if ( ent->IsType( idAI::Type ) ) {
-				if ( static_cast<idAI *>( ent )->GetTalkState() >= TALK_OK ) {
+				if ( static_cast<idAI*>( ent )->GetTalkState() >= TALK_OK ) {
 					gameLocal.clip.TracePoint( trace, start, end, MASK_SHOT_RENDERMODEL, this );
 					if ( ( trace.fraction < 1.0f ) && ( trace.c.entityNum == ent->entityNumber ) ) {
 						ClearFocus();
-						focusCharacter = static_cast<idAI *>( ent );
+						focusCharacter = static_cast<idAI*>( ent );
 						talkCursor = 1;
 						focusTime = gameLocal.time + FOCUS_TIME;
 						break;
@@ -4461,7 +5361,7 @@ void idPlayer::UpdateFocus( void ) {
 				gameLocal.clip.TracePoint( trace, start, end, MASK_SHOT_RENDERMODEL, this );
 				if ( ( trace.fraction < 1.0f ) && ( trace.c.entityNum == ent->entityNumber ) ) {
 					ClearFocus();
-					focusVehicle = static_cast<idAFEntity_Vehicle *>( ent );
+					focusVehicle = static_cast<idAFEntity_Vehicle*>( ent );
 					focusTime = gameLocal.time + FOCUS_TIME;
 					break;
 				}
@@ -4513,10 +5413,10 @@ void idPlayer::UpdateFocus( void ) {
 					const char *iicon = item->GetString( "inv_icon" );
 					const char *itext = item->GetString( "inv_text" );
 
-					focusUI->SetStateString( va( "inv_name_%i", j), iname );
-					focusUI->SetStateString( va( "inv_icon_%i", j), iicon );
-					focusUI->SetStateString( va( "inv_text_%i", j), itext );
-					kv = item->MatchPrefix("inv_id", NULL);
+					focusUI->SetStateString( va( "inv_name_%i", j ), iname );
+					focusUI->SetStateString( va( "inv_icon_%i", j ), iicon );
+					focusUI->SetStateString( va( "inv_text_%i", j ), itext );
+					kv = item->MatchPrefix( "inv_id", NULL );
 					if ( kv ) {
 						focusUI->SetStateString( va( "inv_id_%i", j ), kv->GetValue() );
 					}
@@ -4524,15 +5424,26 @@ void idPlayer::UpdateFocus( void ) {
 				}
 
 
-				for( j = 0; j < inventory.pdaSecurity.Num(); j++ ) {
+				for ( j = 0; j < inventory.pdaSecurity.Num(); j++ ) {
 					const char *p = inventory.pdaSecurity[ j ];
 					if ( p && *p ) {
 						focusUI->SetStateInt( p, 1 );
 					}
 				}
 
+				// BSM: Added for powercells
+				int powerCellCount = 0;
+				for ( j = 0; j < inventory.items.Num(); j++ ) {
+					idDict *item = inventory.items[ j ];
+					if ( item->GetInt( "inv_powercell" ) ) {
+						powerCellCount++;
+					}
+				}
+				focusUI->SetStateInt( "powercell_count", powerCellCount );
+
+
 				int staminapercentage = ( int )( 100.0f * stamina / pm_stamina.GetFloat() );
-				focusUI->SetStateString( "player_health", va("%i", health ) );
+				focusUI->SetStateString( "player_health", va( "%i", health ) );
 				focusUI->SetStateString( "player_stamina", va( "%i%%", staminapercentage ) );
 				focusUI->SetStateString( "player_armor", va( "%i%%", inventory.armor ) );
 
@@ -4578,11 +5489,12 @@ void idPlayer::UpdateFocus( void ) {
 	if ( oldChar != focusCharacter && hud ) {
 		if ( focusCharacter ) {
 			hud->SetStateString( "npc", focusCharacter->spawnArgs.GetString( "npc_name", "Joe" ) );
+			//Use to code to update the npc action string to fix bug 1159
+			hud->SetStateString( "npc_action", common->GetLanguageDict()->GetString( "#str_02036" ) );
 			hud->HandleNamedEvent( "showNPC" );
-			// HideTip();
-			// HideObjective();
 		} else {
 			hud->SetStateString( "npc", "" );
+			hud->SetStateString( "npc_action", "" );
 			hud->HandleNamedEvent( "hideNPC" );
 		}
 	}
@@ -4599,7 +5511,7 @@ void idPlayer::CrashLand( const idVec3 &oldOrigin, const idVec3 &oldVelocity ) {
 	idVec3		origin, velocity;
 	idVec3		gravityVector, gravityNormal;
 	float		delta;
-	float		hardDelta, fatalDelta;
+	float		hardDelta, fatalDelta, softDelta;
 	float		dist;
 	float		vel, acc;
 	float		t;
@@ -4677,9 +5589,11 @@ void idPlayer::CrashLand( const idVec3 &oldOrigin, const idVec3 &oldVelocity ) {
 	if ( gameLocal.isMultiplayer ) {
 		fatalDelta	= 75.0f;
 		hardDelta	= 50.0f;
+		softDelta	= 45.0f;
 	} else {
 		fatalDelta	= 65.0f;
 		hardDelta	= 45.0f;
+		softDelta	= 30.0f;
 	}
 
 	if ( delta > fatalDelta ) {
@@ -4698,7 +5612,7 @@ void idPlayer::CrashLand( const idVec3 &oldOrigin, const idVec3 &oldVelocity ) {
 			pain_debounce_time = gameLocal.time + pain_delay + 1;  // ignore pain since we'll play our landing anim
 			Damage( NULL, NULL, idVec3( 0, 0, -1 ), "damage_hardfall", 1.0f, 0 );
 		}
-	} else if ( delta > 30 ) {
+	} else if ( delta > softDelta ) {
 		AI_HARDLANDING = true;
 		landChange	= -16;
 		landTime	= gameLocal.time;
@@ -4730,11 +5644,12 @@ void idPlayer::BobCycle( const idVec3 &pushVelocity ) {
 	float		speed;
 	float		f;
 
-	//
-	// calculate speed and cycle to be used for
-	// all cyclic walking effects
-	//
+	// calculate speed and cycle to be used for all cyclic walking effects
 	velocity = physicsObj.GetLinearVelocity() - pushVelocity;
+
+	if ( noclip ) {
+		velocity.Zero();
+	}
 
 	gravityDir = physicsObj.GetGravityNormal();
 	vel = velocity - ( velocity * gravityDir ) * gravityDir;
@@ -4769,9 +5684,9 @@ void idPlayer::BobCycle( const idVec3 &pushVelocity ) {
 
 		// check for footstep / splash sounds
 		old = bobCycle;
-		bobCycle = (int)( old + bobmove * gameLocal.msec ) & 255;
+		bobCycle = ( int )( old + bobmove * gameLocal.msec ) & 255;
 		bobFoot = ( bobCycle & 128 ) >> 7;
-		bobfracsin = idMath::Fabs( sin( ( bobCycle & 127 ) / 127.0 * idMath::PI ) );
+		bobfracsin = idMath::Fabs( idMath::Sin ( ( bobCycle & 127 ) / 127.0 * idMath::PI ) );
 	}
 
 	// calculate angles for view bobbing
@@ -4857,7 +5772,7 @@ idPlayer::UpdateDeltaViewAngles
 void idPlayer::UpdateDeltaViewAngles( const idAngles &angles ) {
 	// set the delta angle
 	idAngles delta;
-	for( int i = 0; i < 3; i++ ) {
+	for ( int i = 0; i < 3; i++ ) {
 		delta[ i ] = angles[ i ] - SHORT2ANGLE( usercmd.angles[ i ] );
 	}
 	SetDeltaViewAngles( delta );
@@ -4905,13 +5820,13 @@ void idPlayer::UpdateViewAngles( void ) {
 	for ( i = 0; i < 3; i++ ) {
 		cmdAngles[i] = SHORT2ANGLE( usercmd.angles[i] );
 		if ( influenceActive == INFLUENCE_LEVEL3 ) {
-			viewAngles[i] += idMath::ClampFloat( -1.0f, 1.0f, idMath::AngleDelta( idMath::AngleNormalize180( SHORT2ANGLE( usercmd.angles[i]) + deltaViewAngles[i] ) , viewAngles[i] ) );
+			viewAngles[i] += idMath::ClampFloat( -1.0f, 1.0f, idMath::AngleDelta( idMath::AngleNormalize180( SHORT2ANGLE( usercmd.angles[i] ) + deltaViewAngles[i] ) , viewAngles[i] ) );
 		} else {
-			viewAngles[i] = idMath::AngleNormalize180( SHORT2ANGLE( usercmd.angles[i]) + deltaViewAngles[i] );
+			viewAngles[i] = idMath::AngleNormalize180( SHORT2ANGLE( usercmd.angles[i] ) + deltaViewAngles[i] );
 		}
 	}
 	if ( !centerView.IsDone( gameLocal.time ) ) {
-		viewAngles.pitch = centerView.GetCurrentValue(gameLocal.time);
+		viewAngles.pitch = centerView.GetCurrentValue( gameLocal.time );
 	}
 
 	// clamp the pitch
@@ -4923,6 +5838,21 @@ void idPlayer::UpdateViewAngles( void ) {
 			// don't let the player look up more than 89 degrees while noclipping
 			viewAngles.pitch = -89.0f;
 		}
+	} else if ( mountedObject ) {
+		int yaw_min, yaw_max, varc;
+
+		mountedObject->GetAngleRestrictions( yaw_min, yaw_max, varc );
+
+		if ( yaw_min < yaw_max ) {
+			viewAngles.yaw = idMath::ClampFloat( yaw_min, yaw_max, viewAngles.yaw );
+		} else {
+			if ( viewAngles.yaw < 0 ) {
+				viewAngles.yaw = idMath::ClampFloat( -180.f, yaw_max, viewAngles.yaw );
+			} else {
+				viewAngles.yaw = idMath::ClampFloat( yaw_min, 180.f, viewAngles.yaw );
+			}
+		}
+		viewAngles.pitch = idMath::ClampFloat( -varc, varc, viewAngles.pitch );
 	} else {
 		if ( viewAngles.pitch > pm_maxviewpitch.GetFloat() ) {
 			// don't let the player look down enough to see the shadow of his (non-existant) feet
@@ -4939,7 +5869,7 @@ void idPlayer::UpdateViewAngles( void ) {
 	SetAngles( idAngles( 0, viewAngles.yaw, 0 ) );
 
 	// save in the log for analyzing weapon angle offsets
-	loggedViewAngles[ gameLocal.framenum & (NUM_LOGGED_VIEW_ANGLES-1) ] = viewAngles;
+	loggedViewAngles[ gameLocal.framenum & ( NUM_LOGGED_VIEW_ANGLES - 1 ) ] = viewAngles;
 }
 
 /*
@@ -4972,7 +5902,6 @@ it is audible or -10db and scales to 8db on the last few beats
 ==============
 */
 void idPlayer::AdjustHeartRate( int target, float timeInSecs, float delay, bool force ) {
-
 	if ( heartInfo.GetEndValue() == target ) {
 		return;
 	}
@@ -4992,7 +5921,7 @@ idPlayer::GetBaseHeartRate
 ==============
 */
 int idPlayer::GetBaseHeartRate( void ) {
-	int base = idMath::FtoiFast( ( BASE_HEARTRATE + LOWHEALTH_HEARTRATE_ADJ ) - ( (float)health / 100.0f ) * LOWHEALTH_HEARTRATE_ADJ );
+	int base = idMath::FtoiFast( ( BASE_HEARTRATE + LOWHEALTH_HEARTRATE_ADJ ) - ( ( float )health / 100.0f ) * LOWHEALTH_HEARTRATE_ADJ );
 	int rate = idMath::FtoiFast( base + ( ZEROSTAMINA_HEARTRATE - base ) * ( 1.0f - stamina / pm_stamina.GetFloat() ) );
 	int diff = ( lastDmgTime ) ? gameLocal.time - lastDmgTime : 99999;
 	rate += ( diff < 5000 ) ? ( diff < 2500 ) ? ( diff < 1000 ) ? 15 : 10 : 5 : 0;
@@ -5006,10 +5935,13 @@ idPlayer::SetCurrentHeartRate
 */
 void idPlayer::SetCurrentHeartRate( void ) {
 
-	int base = idMath::FtoiFast( ( BASE_HEARTRATE + LOWHEALTH_HEARTRATE_ADJ ) - ( (float) health / 100.0f ) * LOWHEALTH_HEARTRATE_ADJ );
-
-	if ( PowerUpActive( ADRENALINE )) {
+	if ( PowerUpActive( ADRENALINE ) ) {
 		heartRate = 135;
+	}
+	// health regen --->
+	else if ( pm_abilityModifierActive.GetInteger() == 2  && health < pm_healthRegenLimit.GetInteger() && health > 0 ) {
+		heartRate = 130 - health;
+	// <---
 	} else {
 		heartRate = idMath::FtoiFast( heartInfo.GetCurrentValue( gameLocal.time ) );
 		int currentRate = GetBaseHeartRate();
@@ -5018,28 +5950,36 @@ void idPlayer::SetCurrentHeartRate( void ) {
 		}
 	}
 
+	int base = idMath::FtoiFast( ( BASE_HEARTRATE + LOWHEALTH_HEARTRATE_ADJ ) - ( ( float ) health / 100.0f ) * LOWHEALTH_HEARTRATE_ADJ );
 	int bps = idMath::FtoiFast( 60.0f / heartRate * 1000.0f );
+
 	if ( gameLocal.time - lastHeartBeat > bps ) {
 		int dmgVol = DMG_VOLUME;
 		int deathVol = DEATH_VOLUME;
 		int zeroVol = ZERO_VOLUME;
 		float pct = 0.0;
 		if ( heartRate > BASE_HEARTRATE && health > 0 ) {
-			pct = (float)(heartRate - base) / (MAX_HEARTRATE - base);
-			pct *= ((float)dmgVol - (float)zeroVol);
+			pct = ( float )( heartRate - base ) / ( MAX_HEARTRATE - base );
+			pct *= ( ( float )dmgVol - ( float )zeroVol );
 		} else if ( health <= 0 ) {
-			pct = (float)(heartRate - DYING_HEARTRATE) / (BASE_HEARTRATE - DYING_HEARTRATE);
+			pct = ( float )( heartRate - DYING_HEARTRATE ) / ( BASE_HEARTRATE - DYING_HEARTRATE );
 			if ( pct > 1.0f ) {
 				pct = 1.0f;
-			} else if (pct < 0.0f) {
+			} else if ( pct < 0.0f ) {
 				pct = 0.0f;
 			}
-			pct *= ((float)deathVol - (float)zeroVol);
+			pct *= ( ( float )deathVol - ( float )zeroVol );
 		}
 
-		pct += (float)zeroVol;
+		pct += ( float )zeroVol;
 
 		if ( pct != zeroVol ) {
+			// health regen
+			if ( pm_abilityModifierActive.GetInteger() == 2 && health < pm_healthRegenLimit.GetInteger() && health > 0 ) {
+				float f = 40 * ( 1.0f - (float)health / pm_healthRegenLimit.GetInteger() ) - 10;
+				if ( pct < f )
+					pct = f;
+			}
 			StartSound( "snd_heartbeat", SND_CHANNEL_HEART, SSF_PRIVATE_SOUND, false, NULL );
 			// modify just this channel to a custom volume
 			soundShaderParms_t	parms;
@@ -5058,12 +5998,13 @@ idPlayer::UpdateAir
 ==============
 */
 void idPlayer::UpdateAir( void ) {
+
 	if ( health <= 0 ) {
 		return;
 	}
 
 	// see if the player is connected to the info_vacuum
-	bool	newAirless = false;
+	bool newAirless = false;
 
 	if ( gameLocal.vacuumAreaNum != -1 ) {
 		int	num = GetNumPVSAreas();
@@ -5082,6 +6023,10 @@ void idPlayer::UpdateAir( void ) {
 		}
 	}
 
+	if ( PowerUpActive( ENVIROTIME ) ) {
+		newAirless = false;
+	}
+
 	if ( newAirless ) {
 		if ( !airless ) {
 			StartSound( "snd_decompress", SND_CHANNEL_ANY, SSF_GLOBAL, false, NULL );
@@ -5095,7 +6040,7 @@ void idPlayer::UpdateAir( void ) {
 			airTics = 0;
 			// check for damage
 			const idDict *damageDef = gameLocal.FindEntityDefDict( "damage_noair", false );
-			int dmgTiming = 1000 * ((damageDef) ? damageDef->GetFloat( "delay", "3.0" ) : 3.0f );
+			int dmgTiming = 1000 * ( ( damageDef ) ? damageDef->GetFloat( "delay", "3.0" ) : 3.0f );
 			if ( gameLocal.time > lastAirDamage + dmgTiming ) {
 				Damage( NULL, NULL, vec3_origin, "damage_noair", 1.0f, 0 );
 				lastAirDamage = gameLocal.time;
@@ -5120,6 +6065,46 @@ void idPlayer::UpdateAir( void ) {
 
 	if ( hud ) {
 		hud->SetStateInt( "player_air", 100 * airTics / pm_airTics.GetInteger() );
+	}
+}
+
+/*
+==============
+idPlayer::UpdatePowerupHud
+==============
+*/
+void idPlayer::UpdatePowerupHud() {
+	if ( health <= 0 ) {
+		return;
+	}
+
+	if ( lastHudPowerup != hudPowerup ) {
+
+		if ( hudPowerup == -1 ) {
+			// The powerup hud should be turned off
+			if ( hud ) {
+				hud->HandleNamedEvent( "noPowerup" );
+			}
+		} else {
+			// Turn the pwoerup hud on
+			if ( hud ) {
+				hud->HandleNamedEvent( "Powerup" );
+			}
+		}
+
+		lastHudPowerup = hudPowerup;
+	}
+
+	if ( hudPowerup != -1 ) {
+		if ( PowerUpActive( hudPowerup ) ) {
+			int remaining = inventory.powerupEndTime[ hudPowerup ] - gameLocal.time;
+			int filledbar = idMath::ClampInt( 0, hudPowerupDuration, remaining );
+
+			if ( hud ) {
+				hud->SetStateInt( "player_powerup", 100 * filledbar / hudPowerupDuration );
+				hud->SetStateInt( "player_poweruptime", remaining / 1000 );
+			}
+		}
 	}
 }
 
@@ -5181,8 +6166,8 @@ idPlayer::GetPDA
 ==============
  */
 const idDeclPDA *idPlayer::GetPDA( void ) const {
-	if ( inventory.pdas.Num() ) {
-		return static_cast< const idDeclPDA* >( declManager->FindType( DECL_PDA, inventory.pdas[ 0 ] ) );
+	if ( inventory.pdas.Num() > 0 ) {
+		return static_cast<const idDeclPDA*>( declManager->FindType( DECL_PDA, inventory.pdas[ 0 ] ) );
 	} else {
 		return NULL;
 	}
@@ -5196,11 +6181,10 @@ idPlayer::GetVideo
 */
 const idDeclVideo *idPlayer::GetVideo( int index ) {
 	if ( index >= 0 && index < inventory.videos.Num() ) {
-		return static_cast< const idDeclVideo* >( declManager->FindType( DECL_VIDEO, inventory.videos[index], false ) );
+		return static_cast<const idDeclVideo*>( declManager->FindType( DECL_VIDEO, inventory.videos[index], false ) );
 	}
 	return NULL;
 }
-
 
 /*
 ==============
@@ -5233,7 +6217,7 @@ void idPlayer::UpdatePDAInfo( bool updatePDASel ) {
 
 	// Mark in the bit array that this pda has been read
 	if ( currentPDA < 128 ) {
-		inventory.pdasViewed[currentPDA >> 5] |= 1 << (currentPDA & 31);
+		inventory.pdasViewed[currentPDA >> 5] |= 1 << ( currentPDA & 31 );
 	}
 
 	pdaAudio = "";
@@ -5250,7 +6234,6 @@ void idPlayer::UpdatePDAInfo( bool updatePDASel ) {
 		objectiveSystem->SetStateString( va( "listPDASecurity_item_%i", j ), "" );
 	}
 	for ( j = 0; j < inventory.pdas.Num(); j++ ) {
-
 		const idDeclPDA *pda = static_cast< const idDeclPDA* >( declManager->FindType( DECL_PDA, inventory.pdas[j], false ) );
 
 		if ( pda == NULL ) {
@@ -5263,17 +6246,17 @@ void idPlayer::UpdatePDAInfo( bool updatePDASel ) {
 			index = 0;
 		}
 
-		if ( j != currentPDA && j < 128 && inventory.pdasViewed[j >> 5] & (1 << (j & 31)) ) {
+		if ( j != currentPDA && j < 128 && inventory.pdasViewed[j >> 5] & ( 1 << ( j & 31 ) ) ) {
 			// This pda has been read already, mark in gray
-			objectiveSystem->SetStateString( va( "listPDA_item_%i", index), va(S_COLOR_GRAY "%s", pda->GetPdaName()) );
+			objectiveSystem->SetStateString( va( "listPDA_item_%i", index ), va( S_COLOR_GRAY "%s", pda->GetPdaName() ) );
 		} else {
 			// This pda has not been read yet
-		objectiveSystem->SetStateString( va( "listPDA_item_%i", index), pda->GetPdaName() );
+		objectiveSystem->SetStateString( va( "listPDA_item_%i", index ), pda->GetPdaName() );
 		}
 
 		const char *security = pda->GetSecurity();
-		if ( j == currentPDA || (currentPDA == 0 && security && *security ) ) {
-			if ( *security == 0 ) {
+		if ( j == currentPDA || ( currentPDA == 0 && security && *security ) ) {
+			if ( *security == '\0' ) {
 				security = common->GetLanguageDict()->GetString( "#str_00066" );
 			}
 			objectiveSystem->SetStateString( "PDASecurityClearance", security );
@@ -5293,13 +6276,13 @@ void idPlayer::UpdatePDAInfo( bool updatePDASel ) {
 				objectiveSystem->SetStateString( "pda_personal", "1" );
 					inventory.pdaOpened = true;
 				}
-				objectiveSystem->SetStateString( "pda_location", hud->State().GetString("location") );
-				objectiveSystem->SetStateString( "pda_name", cvarSystem->GetCVarString( "ui_name") );
+				objectiveSystem->SetStateString( "pda_location", hud->State().GetString( "location" ) );
+				objectiveSystem->SetStateString( "pda_name", cvarSystem->GetCVarString( "ui_name" ) );
 				AddGuiPDAData( DECL_VIDEO, "listPDAVideo", pda, objectiveSystem );
 				sel = objectiveSystem->State().GetInt( "listPDAVideo_sel_0", "0" );
 				const idDeclVideo *vid = NULL;
 				if ( sel >= 0 && sel < inventory.videos.Num() ) {
-					vid = static_cast< const idDeclVideo * >( declManager->FindType( DECL_VIDEO, inventory.videos[ sel ], false ) );
+					vid = static_cast< const idDeclVideo*>( declManager->FindType( DECL_VIDEO, inventory.videos[ sel ], false ) );
 				}
 				if ( vid ) {
 					pdaVideo = vid->GetRoq();
@@ -5315,7 +6298,9 @@ void idPlayer::UpdatePDAInfo( bool updatePDASel ) {
 					objectiveSystem->SetStateString( "PDAVideoTitle", "" );
 					objectiveSystem->SetStateString( "PDAVideoInfo", "" );
 				}
+
 			} else {
+
 				// Selected, non-personal pda
 				// Add audio logs
 				if ( updatePDASel ) {
@@ -5484,6 +6469,7 @@ void idPlayer::Spectate( bool spectate ) {
 		physicsObj.DisableClip();
 		Hide();
 		Event_DisableWeapon();
+
 		if ( hud ) {
 			hud->HandleNamedEvent( "aim_clear" );
 			MPAimFadeTime = 0;
@@ -5537,7 +6523,7 @@ void idPlayer::UseVehicle( void ) {
 
 	if ( GetBindMaster() && GetBindMaster()->IsType( idAFEntity_Vehicle::Type ) ) {
 		Show();
-		static_cast<idAFEntity_Vehicle*>(GetBindMaster())->Use( this );
+		static_cast<idAFEntity_Vehicle*>( GetBindMaster() )->Use( this );
 	} else {
 		start = GetEyePosition();
 		end = start + viewAngles.ToForward() * 80.0f;
@@ -5546,7 +6532,7 @@ void idPlayer::UseVehicle( void ) {
 			ent = gameLocal.entities[ trace.c.entityNum ];
 			if ( ent && ent->IsType( idAFEntity_Vehicle::Type ) ) {
 				Hide();
-				static_cast<idAFEntity_Vehicle*>(ent)->Use( this );
+				static_cast<idAFEntity_Vehicle*>( ent )->Use( this );
 			}
 		}
 	}
@@ -5558,10 +6544,11 @@ idPlayer::PerformImpulse
 ==============
 */
 void idPlayer::PerformImpulse( int impulse ) {
+	int prevIdealWeap;
 
 	if ( gameLocal.isClient ) {
-		idBitMsg	msg;
-		byte		msgBuf[MAX_EVENT_PARAM_SIZE];
+		idBitMsg msg;
+		byte msgBuf[MAX_EVENT_PARAM_SIZE];
 
 		assert( entityNumber == gameLocal.localClientNum );
 		msg.Init( msgBuf, sizeof( msgBuf ) );
@@ -5570,37 +6557,89 @@ void idPlayer::PerformImpulse( int impulse ) {
 		ClientSendEvent( EVENT_IMPULSE, &msg );
 	}
 
+	// DentonMod : use the remaining impulses for weapon slots --->
+	if ( impulse == IMPULSE_21 || ( impulse >= IMPULSE_23 && impulse <= IMPULSE_26 ) ) {
+		int weap;
+		if ( spawnArgs.GetInt ( va( "impulse%d", impulse ), "0", weap ) ) {
+			prevIdealWeap = idealWeapon;
+			SelectWeapon( weap, false);
+			if( idealWeapon != prevIdealWeap ) {
+				quickWeapon = prevIdealWeap;
+			}
+		}
+		return;
+	}
+	// <---
+
+	// weapon keys
 	if ( impulse >= IMPULSE_0 && impulse <= IMPULSE_12 ) {
-		SelectWeapon( impulse, false );
+		// DentonMod changes: might have fucked up this but it wont break the game so fuck it for now
+		WeaponToggle_t *weaponToggle;
+		// This loop works as a small bug fix for toggle weapons
+		// It simply increments the impulse value if there are multiple weapons under one weapon slot.
+		for ( int i=0; i<impulse; i++ ) {
+			if ( weaponToggles.Get( va( "weapontoggle%d", i ), &weaponToggle ) )
+				impulse += weaponToggle->toggleList.Num() - 1;
+		}
+
+		prevIdealWeap = idealWeapon;
+		SelectWeapon( impulse, false, true);
+		if( idealWeapon != prevIdealWeap ) {
+			quickWeapon = prevIdealWeap;
+		}
 		return;
 	}
 
-	switch( impulse ) {
+	switch ( impulse ) {
+		// weapon reload
 		case IMPULSE_13: {
 			Reload();
 			break;
 		}
+		// next weapon
 		case IMPULSE_14: {
+			prevIdealWeap = idealWeapon;
 			NextWeapon();
+			if( idealWeapon != prevIdealWeap ) {
+				quickWeapon = prevIdealWeap;
+			}
 			break;
 		}
+		// previous weapon
 		case IMPULSE_15: {
+			prevIdealWeap = idealWeapon;
 			PrevWeapon();
+			if( idealWeapon != prevIdealWeap ) {
+				quickWeapon = prevIdealWeap;
+			}
 			break;
 		}
+		// quick weapon (DentonMod)
+  		case IMPULSE_16: {
+			if ( quickWeapon == -1 ) { // count out the pda
+				return;
+			} 
+
+			prevIdealWeap = idealWeapon;
+			SelectWeapon( quickWeapon, false );
+			quickWeapon = prevIdealWeap;
+			break;
+		}
+ 
+		// toggle ready (MP)
 		case IMPULSE_17: {
 			if ( gameLocal.isClient || entityNumber == gameLocal.localClientNum ) {
 				gameLocal.mpGame.ToggleReady();
 			}
 			break;
 		}
+		// center view
 		case IMPULSE_18: {
-			centerView.Init(gameLocal.time, 200, viewAngles.pitch, 0);
+			centerView.Init( gameLocal.time, 200, viewAngles.pitch, 0 );
 			break;
 		}
+		// when we're not in single player, IMPULSE_19 is used for showScores, otherwise it opens the pda
 		case IMPULSE_19: {
-			// when we're not in single player, IMPULSE_19 is used for showScores
-			// otherwise it opens the pda
 			if ( !gameLocal.isMultiplayer ) {
 				if ( objectiveSystemOpen ) {
 					TogglePDA();
@@ -5610,30 +6649,78 @@ void idPlayer::PerformImpulse( int impulse ) {
 			}
 			break;
 		}
+		// toggle team (MP)
 		case IMPULSE_20: {
 			if ( gameLocal.isClient || entityNumber == gameLocal.localClientNum ) {
 				gameLocal.mpGame.ToggleTeam();
 			}
 			break;
 		}
+		// spectate (MP)
 		case IMPULSE_22: {
 			if ( gameLocal.isClient || entityNumber == gameLocal.localClientNum ) {
 				gameLocal.mpGame.ToggleSpectate();
 			}
 			break;
 		}
+		// envirosuit light (MP)
+		case IMPULSE_25: {
+			if ( gameLocal.isServer && gameLocal.mpGame.IsGametypeFlagBased() && ( gameLocal.serverInfo.GetInt( "si_midnight" ) == 2 ) ) {
+				if ( enviroSuitLight.IsValid() ) {
+					enviroSuitLight.GetEntity()->PostEventMS( &EV_Remove, 0 );
+					enviroSuitLight = NULL;
+				} else {
+					const idDict *lightDef = gameLocal.FindEntityDefDict( "envirosuit_light", false );
+					if ( lightDef ) {
+						idEntity *temp = static_cast<idEntity*>( enviroSuitLight.GetEntity() );
+						idAngles lightAng = firstPersonViewAxis.ToAngles();
+						idVec3 lightOrg = firstPersonViewOrigin;
+
+						idVec3 enviroOffset = lightDef->GetVector( "enviro_offset" );
+						idVec3 enviroAngleOffset = lightDef->GetVector( "enviro_angle_offset" );
+
+						gameLocal.SpawnEntityDef( *lightDef, &temp, false );
+						enviroSuitLight = static_cast<idLight*>( temp );
+
+						enviroSuitLight.GetEntity()->fl.networkSync = true;
+
+						lightOrg += ( enviroOffset.x * firstPersonViewAxis[0] );
+						lightOrg += ( enviroOffset.y * firstPersonViewAxis[1] );
+						lightOrg += ( enviroOffset.z * firstPersonViewAxis[2] );
+						lightAng.pitch += enviroAngleOffset.x;
+						lightAng.yaw += enviroAngleOffset.y;
+						lightAng.roll += enviroAngleOffset.z;
+
+						enviroSuitLight.GetEntity()->GetPhysics()->SetOrigin( lightOrg );
+						enviroSuitLight.GetEntity()->GetPhysics()->SetAxis( lightAng.ToMat3() );
+
+						enviroSuitLight.GetEntity()->UpdateVisuals();
+						enviroSuitLight.GetEntity()->Present();
+					}
+				}
+			}
+			break;
+		}
+		// select chainsaw
+		case IMPULSE_27: {
+			SelectWeapon( weapon_chainsaw, false );
+			break;
+		}
+		// vote true (MP)
 		case IMPULSE_28: {
 			if ( gameLocal.isClient || entityNumber == gameLocal.localClientNum ) {
 				gameLocal.mpGame.CastVote( gameLocal.localClientNum, true );
 			}
 			break;
 		}
+		// vote false (MP)
 		case IMPULSE_29: {
 			if ( gameLocal.isClient || entityNumber == gameLocal.localClientNum ) {
 				gameLocal.mpGame.CastVote( gameLocal.localClientNum, false );
 			}
 			break;
 		}
+		// use vehicle
 		case IMPULSE_40: {
 			UseVehicle();
 			break;
@@ -5641,6 +6728,11 @@ void idPlayer::PerformImpulse( int impulse ) {
 	}
 }
 
+/*
+==============
+idPlayer::HandleESC
+==============
+*/
 bool idPlayer::HandleESC( void ) {
 	if ( gameLocal.inCinematic ) {
 		return SkipCinematic();
@@ -5654,6 +6746,11 @@ bool idPlayer::HandleESC( void ) {
 	return false;
 }
 
+/*
+==============
+idPlayer::SkipCinematic
+==============
+*/
 bool idPlayer::SkipCinematic( void ) {
 	StartSound( "snd_skipcinematic", SND_CHANNEL_ANY, 0, false, NULL );
 	return gameLocal.SkipCinematic();
@@ -5740,7 +6837,7 @@ void idPlayer::AdjustSpeed( void ) {
 		bobFrac = 0.0f;
 	}
 
-	speed *= PowerUpModifier(SPEED);
+	speed *= PowerUpModifier( SPEED );
 
 	if ( influenceActive == INFLUENCE_LEVEL3 ) {
 		speed *= 0.33f;
@@ -5769,7 +6866,6 @@ void idPlayer::AdjustBodyAngles( void ) {
 	}
 
 	blend = true;
-
 	if ( !physicsObj.HasGroundContacts() ) {
 		idealLegsYaw = 0.0f;
 		legsForward = true;
@@ -5861,11 +6957,11 @@ void idPlayer::InitAASLocation( void ) {
 	num = gameLocal.NumAAS();
 	aasLocation.SetGranularity( 1 );
 	aasLocation.SetNum( num );
-	for( i = 0; i < aasLocation.Num(); i++ ) {
+	for ( i = 0; i < aasLocation.Num(); i++ ) {
 		aasLocation[ i ].areaNum = 0;
 		aasLocation[ i ].pos = origin;
 		aas = gameLocal.GetAAS( i );
-		if ( aas && aas->GetSettings() ) {
+		if ( aas != NULL && aas->GetSettings() ) {
 			size = aas->GetSettings()->boundingBoxes[0][1];
 			bounds[0] = -size;
 			size.z = 32.0f;
@@ -5893,7 +6989,7 @@ void idPlayer::SetAASLocation( void ) {
 		return;
 	}
 
-	for( i = 0; i < aasLocation.Num(); i++ ) {
+	for ( i = 0; i < aasLocation.Num(); i++ ) {
 		aas = gameLocal.GetAAS( i );
 		if ( !aas ) {
 			continue;
@@ -5921,7 +7017,7 @@ void idPlayer::GetAASLocation( idAAS *aas, idVec3 &pos, int &areaNum ) const {
 	int i;
 
 	if ( aas != NULL ) {
-		for( i = 0; i < aasLocation.Num(); i++ ) {
+		for ( i = 0; i < aasLocation.Num(); i++ ) {
 			if ( aas == gameLocal.GetAAS( i ) ) {
 				areaNum = aasLocation[ i ].areaNum;
 				pos = aasLocation[ i ].pos;
@@ -5965,6 +7061,9 @@ void idPlayer::Move( void ) {
 		physicsObj.SetMovementType( PM_DEAD );
 	} else if ( gameLocal.inCinematic || gameLocal.GetCamera() || privateCameraView || ( influenceActive == INFLUENCE_LEVEL2 ) ) {
 		physicsObj.SetContents( CONTENTS_BODY );
+		physicsObj.SetMovementType( PM_FREEZE );
+	} else if ( mountedObject ) {
+		physicsObj.SetContents( 0 );
 		physicsObj.SetMovementType( PM_FREEZE );
 	} else {
 		physicsObj.SetContents( CONTENTS_BODY );
@@ -6039,7 +7138,7 @@ void idPlayer::Move( void ) {
 
 	if ( AI_JUMP ) {
 		// bounce the view weapon
-		loggedAccel_t	*acc = &loggedAccel[currentLoggedAccel&(NUM_LOGGED_ACCELS-1)];
+		loggedAccel_t *acc = &loggedAccel[currentLoggedAccel & ( NUM_LOGGED_ACCELS - 1 )];
 		currentLoggedAccel++;
 		acc->time = gameLocal.time;
 		acc->dir[2] = 200;
@@ -6065,7 +7164,7 @@ idPlayer::UpdateHud
 ==============
 */
 void idPlayer::UpdateHud( void ) {
-	idPlayer *aimed;
+	idPlayer *aimed = NULL;
 
 	if ( !hud ) {
 		return;
@@ -6081,15 +7180,23 @@ void idPlayer::UpdateHud( void ) {
 			if ( inventory.nextItemPickup && gameLocal.time - inventory.nextItemPickup > 2000 ) {
 				inventory.nextItemNum = 1;
 			}
-			int i;
-			for ( i = 0; i < 5 && i < c; i++ ) {
+			int i, count = 5;
+			if ( gameLocal.isMultiplayer ) {
+				count = 3;
+			}
+
+			if ( count < c ) {
+				c = count;
+			}
+
+			for ( i = 0; i < c; i++ ) {
 				hud->SetStateString( va( "itemtext%i", inventory.nextItemNum ), inventory.pickupItemNames[0].name );
 				hud->SetStateString( va( "itemicon%i", inventory.nextItemNum ), inventory.pickupItemNames[0].icon );
 				hud->HandleNamedEvent( va( "itemPickup%i", inventory.nextItemNum++ ) );
 				inventory.pickupItemNames.RemoveIndex( 0 );
-				if (inventory.nextItemNum == 1 ) {
+				if ( inventory.nextItemNum == 1 ) {
 					inventory.onePickupTime = gameLocal.time;
-				} else	if ( inventory.nextItemNum > 5 ) {
+				} else	if ( inventory.nextItemNum > count ) {
 					inventory.nextItemNum = 1;
 					inventory.nextItemPickup = inventory.onePickupTime + 2000;
 				} else {
@@ -6100,10 +7207,10 @@ void idPlayer::UpdateHud( void ) {
 	}
 
 	if ( gameLocal.realClientTime == lastMPAimTime ) {
-		if ( MPAim != -1 && gameLocal.gameType == GAME_TDM
+		if ( MPAim != -1 && gameLocal.mpGame.IsGametypeTeamBased()
 			&& gameLocal.entities[ MPAim ] && gameLocal.entities[ MPAim ]->IsType( idPlayer::Type )
-			&& static_cast< idPlayer * >( gameLocal.entities[ MPAim ] )->team == team ) {
-				aimed = static_cast< idPlayer * >( gameLocal.entities[ MPAim ] );
+			&& static_cast<idPlayer*>( gameLocal.entities[ MPAim ] )->team == team ) {
+				aimed = static_cast<idPlayer*>( gameLocal.entities[ MPAim ] );
 				hud->SetStateString( "aim_text", gameLocal.userInfo[ MPAim ].GetString( "ui_name" ) );
 				hud->SetStateFloat( "aim_color", aimed->colorBarIndex );
 				hud->HandleNamedEvent( "aim_flash" );
@@ -6124,7 +7231,7 @@ void idPlayer::UpdateHud( void ) {
 
 	hud->SetStateInt( "g_showProjectilePct", g_showProjectilePct.GetInteger() );
 	if ( numProjectilesFired ) {
-		hud->SetStateString( "projectilepct", va( "Hit %% %.1f", ( (float) numProjectileHits / numProjectilesFired ) * 100 ) );
+		hud->SetStateString( "projectilepct", va( "Hit %% %.1f", ( ( float ) numProjectileHits / numProjectilesFired ) * 100 ) );
 	} else {
 		hud->SetStateString( "projectilepct", "Hit % 0.0" );
 	}
@@ -6202,8 +7309,6 @@ Called every tic for each player
 ==============
 */
 void idPlayer::Think( void ) {
-	renderEntity_t *headRenderEnt;
-
 	UpdatePlayerIcons();
 
 	// latch button actions
@@ -6230,6 +7335,12 @@ void idPlayer::Think( void ) {
 		oldFlags = usercmd.flags;
 	}
 
+	if ( mountedObject ) {
+		usercmd.forwardmove = 0;
+		usercmd.rightmove = 0;
+		usercmd.upmove = 0;
+	}
+
 	if ( objectiveSystemOpen || gameLocal.inCinematic || influenceActive ) {
 		if ( objectiveSystemOpen && AI_PAIN ) {
 			TogglePDA();
@@ -6241,7 +7352,7 @@ void idPlayer::Think( void ) {
 
 	// log movement changes for weapon bobbing effects
 	if ( usercmd.forwardmove != oldCmd.forwardmove ) {
-		loggedAccel_t	*acc = &loggedAccel[currentLoggedAccel&(NUM_LOGGED_ACCELS-1)];
+		loggedAccel_t *acc = &loggedAccel[currentLoggedAccel & ( NUM_LOGGED_ACCELS - 1 )];
 		currentLoggedAccel++;
 		acc->time = gameLocal.time;
 		acc->dir[0] = usercmd.forwardmove - oldCmd.forwardmove;
@@ -6249,7 +7360,7 @@ void idPlayer::Think( void ) {
 	}
 
 	if ( usercmd.rightmove != oldCmd.rightmove ) {
-		loggedAccel_t	*acc = &loggedAccel[currentLoggedAccel&(NUM_LOGGED_ACCELS-1)];
+		loggedAccel_t *acc = &loggedAccel[currentLoggedAccel & ( NUM_LOGGED_ACCELS - 1 )];
 		currentLoggedAccel++;
 		acc->time = gameLocal.time;
 		acc->dir[1] = usercmd.rightmove - oldCmd.rightmove;
@@ -6270,6 +7381,17 @@ void idPlayer::Think( void ) {
 		}
 	}
 
+	// weapon zooming, ( DentonMod ) --->
+	if ( ( weaponZoom.oldZoomStatus ^ weaponZoom.startZoom ) ) {
+		if ( weaponZoom.startZoom && weapon.GetEntity()) {
+			weaponZoom.oldZoomStatus = true;
+			zoomFov.Init( gameLocal.time, 200.0f, CalcFov( false ), weapon.GetEntity()->GetZoomFov() );
+		} else {
+			weaponZoom.oldZoomStatus = false;
+			zoomFov.Init( gameLocal.time, 200.0f, zoomFov.GetCurrentValue(gameLocal.time), DefaultFov() );
+		}
+	} // <---
+
 	// if we have an active gui, we will unrotate the view angles as
 	// we turn the mouse movements into gui events
 	idUserInterface *gui = ActiveGui();
@@ -6282,6 +7404,13 @@ void idPlayer::Think( void ) {
 		weapon.GetEntity()->SetPushVelocity( physicsObj.GetPushedLinearVelocity() );
 	}
 
+	// check if invisible
+	if ( PowerUpActive( INVISIBILITY ) ) {
+		fl.invisible = true;
+	} else {
+		fl.invisible = false;
+	}
+
 	EvaluateControls();
 
 	if ( !af.IsActive() ) {
@@ -6292,7 +7421,6 @@ void idPlayer::Think( void ) {
 	Move();
 
 	if ( !g_stopTime.GetBool() ) {
-
 		if ( !noclip && !spectating && ( health > 0 ) && !IsHidden() ) {
 			TouchTriggers();
 		}
@@ -6300,7 +7428,7 @@ void idPlayer::Think( void ) {
 		// not done on clients for various reasons. don't do it on server and save the sound channel for other things
 		if ( !gameLocal.isMultiplayer ) {
 			SetCurrentHeartRate();
-			float scale = g_damageScale.GetFloat();
+			float scale = new_g_damageScale;
 			if ( g_useDynamicProtection.GetBool() && scale < 1.0f && gameLocal.time - lastDmgTime > 500 ) {
 				if ( scale < 1.0f ) {
 					scale += 0.05f;
@@ -6308,7 +7436,7 @@ void idPlayer::Think( void ) {
 				if ( scale > 1.0f ) {
 					scale = 1.0f;
 				}
-				g_damageScale.SetFloat( scale );
+				new_g_damageScale = scale;
 			}
 		}
 
@@ -6348,20 +7476,46 @@ void idPlayer::Think( void ) {
 
 	UpdateAir();
 
+	UpdatePowerupHud();
+
 	UpdateHud();
 
 	UpdatePowerUps();
 
 	UpdateDeathSkin( false );
 
-	if ( gameLocal.isMultiplayer ) {
-		DrawPlayerIcons();
+	if ( !gameLocal.inCinematic || !influenceActive ) {
+		ManageActiveAbilities();
 	}
 
+	if ( gameLocal.isMultiplayer ) {
+		DrawPlayerIcons();
+
+		if ( enviroSuitLight.IsValid() ) {
+			idAngles lightAng = firstPersonViewAxis.ToAngles();
+			idVec3 lightOrg = firstPersonViewOrigin;
+			const idDict *lightDef = gameLocal.FindEntityDefDict( "envirosuit_light", false );
+
+			idVec3 enviroOffset = lightDef->GetVector( "enviro_offset" );
+			idVec3 enviroAngleOffset = lightDef->GetVector( "enviro_angle_offset" );
+
+			lightOrg += ( enviroOffset.x * firstPersonViewAxis[0] );
+			lightOrg += ( enviroOffset.y * firstPersonViewAxis[1] );
+			lightOrg += ( enviroOffset.z * firstPersonViewAxis[2] );
+			lightAng.pitch += enviroAngleOffset.x;
+			lightAng.yaw += enviroAngleOffset.y;
+			lightAng.roll += enviroAngleOffset.z;
+
+			enviroSuitLight.GetEntity()->GetPhysics()->SetOrigin( lightOrg );
+			enviroSuitLight.GetEntity()->GetPhysics()->SetAxis( lightAng.ToMat3() );
+			enviroSuitLight.GetEntity()->UpdateVisuals();
+			enviroSuitLight.GetEntity()->Present();
+		}
+	}
+
+	renderEntity_t *headRenderEnt = NULL;
 	if ( head.GetEntity() ) {
 		headRenderEnt = head.GetEntity()->GetRenderEntity();
-	} else {
-		headRenderEnt = NULL;
 	}
 
 	if ( headRenderEnt ) {
@@ -6383,6 +7537,7 @@ void idPlayer::Think( void ) {
 			headRenderEnt->suppressShadowInViewID = entityNumber+1;
 		}
 	}
+
 	// never cast shadows from our first-person muzzle flashes
 	renderEntity.suppressShadowInLightID = LIGHTID_VIEW_MUZZLE_FLASH + entityNumber;
 	if ( headRenderEnt ) {
@@ -6408,12 +7563,168 @@ void idPlayer::Think( void ) {
 	if ( g_showEnemies.GetBool() ) {
 		idActor *ent;
 		int num = 0;
-		for( ent = enemyList.Next(); ent != NULL; ent = ent->enemyNode.Next() ) {
+
+		for ( ent = enemyList.Next(); ent != NULL; ent = ent->enemyNode.Next() ) {
 			gameLocal.Printf( "enemy (%d)'%s'\n", ent->entityNumber, ent->name.c_str() );
 			gameRenderWorld->DebugBounds( colorRed, ent->GetPhysics()->GetBounds().Expand( 2 ), ent->GetPhysics()->GetOrigin() );
 			num++;
 		}
 		gameLocal.Printf( "%d: enemies\n", num );
+	}
+
+	inventory.RechargeAmmo( this );
+
+	if ( healthRecharge ) {
+		int elapsed = gameLocal.time - lastHealthRechargeTime;
+		if ( elapsed >= rechargeSpeed ) {
+			int intervals = ( gameLocal.time - lastHealthRechargeTime ) / rechargeSpeed;
+			Give( "health", va( "%d", intervals ) );
+			lastHealthRechargeTime += intervals * rechargeSpeed;
+		}
+	}
+
+	// determine if portal sky is in pvs
+	gameLocal.portalSkyActive = gameLocal.pvs.CheckAreasForPortalSky( gameLocal.GetPlayerPVS(), GetPhysics()->GetOrigin() );
+}
+
+/*
+=================
+idPlayer::StartHealthRecharge
+=================
+*/
+void idPlayer::StartHealthRecharge( int speed ) {
+	lastHealthRechargeTime = gameLocal.time;
+	healthRecharge = true;
+	rechargeSpeed = speed;
+}
+
+/*
+=================
+idPlayer::StopHealthRecharge
+=================
+*/
+void idPlayer::StopHealthRecharge() {
+	healthRecharge = false;
+}
+
+/*
+=================
+idPlayer::GetCurrentWeapon
+=================
+*/
+idStr idPlayer::GetCurrentWeapon() {
+	const char	*weapon;
+
+	if ( currentWeapon >= 0 ) {
+		weapon = spawnArgs.GetString( va( "def_weapon%d", currentWeapon ) );
+		return weapon;
+	} else {
+		return "";
+	}
+}
+
+/*
+=================
+idPlayer::CanGive
+=================
+*/
+bool idPlayer::CanGive( const char *statname, const char *value ) {
+	if ( AI_DEAD ) {
+		return false;
+	}
+
+	if ( !idStr::Icmp( statname, "health" ) ) {
+		if ( health >= inventory.maxHealth ) {
+			return false;
+		}
+		return true;
+	} else if ( !idStr::Icmp( statname, "stamina" ) ) {
+		if ( stamina >= 100 ) {
+			return false;
+		}
+		return true;
+
+	} else if ( !idStr::Icmp( statname, "heartRate" ) ) {
+		return true;
+
+	} else if ( !idStr::Icmp( statname, "air" ) ) {
+		if ( airTics >= pm_airTics.GetInteger() ) {
+			return false;
+		}
+		return true;
+	}
+
+	return inventory.CanGive( this, spawnArgs, statname, value, &idealWeapon );
+}
+
+/*
+=================
+idPlayer::StopHelltime
+
+Provides a quick non-ramping way of stopping helltime
+=================
+*/
+void idPlayer::StopHelltime( bool quick ) {
+	if ( !PowerUpActive( HELLTIME ) ) {
+		return;
+	}
+
+	// take away the powerups
+	if ( PowerUpActive( INVULNERABILITY ) ) {
+		ClearPowerup( INVULNERABILITY );
+	}
+
+	// only clear berserk if it's given from the hell heart
+	if ( PowerUpActive( BERSERK ) && weapon.GetEntity()->PowerupFromWeapon() ) {
+		ClearPowerup( BERSERK );
+	}
+
+	if ( PowerUpActive( HELLTIME ) ) {
+		ClearPowerup( HELLTIME );
+	}
+
+	// stop the looping sound
+	StopSound( SND_CHANNEL_DEMONIC, false );
+
+	// reset the game vars
+	if ( quick ) {
+		gameLocal.QuickSlowmoReset();
+	}
+}
+
+/*
+=================
+idPlayer::Event_ToggleBloom
+=================
+*/
+void idPlayer::Event_ToggleBloom( int on ) {
+	if ( on ) {
+		bloomEnabled = true;
+	} else {
+		bloomEnabled = false;
+	}
+}
+
+/*
+=================
+idPlayer::Event_SetBloomParms
+=================
+*/
+void idPlayer::Event_SetBloomParms( float speed, float intensity ) {
+	bloomSpeed = speed;
+	bloomIntensity = intensity;
+}
+
+/*
+=================
+idPlayer::PlayHelltimeStopSound
+=================
+*/
+void idPlayer::PlayHelltimeStopSound() {
+	const char *sound;
+
+	if ( spawnArgs.GetString( "snd_helltime_stop", "", &sound ) ) {
+		PostEventMS( &EV_StartSoundShader, 0, sound, SND_CHANNEL_ANY );
 	}
 }
 
@@ -6488,6 +7799,10 @@ void idPlayer::Killed( idEntity *inflictor, idEntity *attacker, int damage, cons
 
 	assert( !gameLocal.isClient );
 
+	// Damaging FX (Ivan) --->
+	idActor::Killed(inflictor, attacker, damage, dir, location);
+	// <---
+
 	// stop taking knockback once dead
 	fl.noknockback = true;
 	if ( health < -999 ) {
@@ -6537,6 +7852,11 @@ void idPlayer::Killed( idEntity *inflictor, idEntity *attacker, int damage, cons
 	// drop the weapon as an item
 	DropWeapon( true );
 
+	// drop the flag if player was carrying it
+	if ( gameLocal.isMultiplayer && gameLocal.mpGame.IsGametypeFlagBased() && carryingFlag ) {
+		DropFlag();
+	}
+
 	if ( !g_testDeath.GetBool() ) {
 		LookAtKiller( inflictor, attacker );
 	}
@@ -6545,7 +7865,7 @@ void idPlayer::Killed( idEntity *inflictor, idEntity *attacker, int damage, cons
 		idPlayer *killer = NULL;
 		// no gibbing in MP. Event_Gib will early out in MP
 		if ( attacker->IsType( idPlayer::Type ) ) {
-			killer = static_cast<idPlayer*>(attacker);
+			killer = static_cast<idPlayer*>( attacker );
 			if ( health < -20 || killer->PowerUpActive( BERSERK ) ) {
 				gibDeath = true;
 				gibsDir = dir;
@@ -6589,14 +7909,27 @@ void idPlayer::GetAIAimTargets( const idVec3 &lastSightPos, idVec3 &headPos, idV
 ================
 idPlayer::DamageFeedback
 
-callback function for when another entity received damage from this entity.  damage can be adjusted and returned to the caller.
+Callback function for when another entity received damage from this entity.  damage can be adjusted and returned to the caller.
 ================
 */
 void idPlayer::DamageFeedback( idEntity *victim, idEntity *inflictor, int &damage ) {
 	assert( !gameLocal.isClient );
 	damage *= PowerUpModifier( BERSERK );
-	if ( damage && ( victim != this ) && victim->IsType( idActor::Type ) ) {
-		SetLastHitTime( gameLocal.time );
+
+	if ( damage && ( victim != this ) && ( victim->IsType( idActor::Type ) || victim->IsType( idDamagable::Type ) ) ) {
+
+		idPlayer *victimPlayer = NULL;
+
+		/* No damage feedback sound for hitting friendlies in CTF */
+		if ( victim->IsType( idPlayer::Type ) ) {
+			victimPlayer = static_cast<idPlayer*>( victim );
+		}
+
+		if ( gameLocal.mpGame.IsGametypeFlagBased() && victimPlayer && this->team == victimPlayer->team ) {
+			/* Do nothing ... */
+		} else {
+			SetLastHitTime( gameLocal.time );
+		}
 	}
 }
 
@@ -6609,15 +7942,14 @@ doesn't actually do anything with them.  This is used to tell when an attack
 would have killed the player, possibly allowing a "saving throw"
 =================
 */
-void idPlayer::CalcDamagePoints( idEntity *inflictor, idEntity *attacker, const idDict *damageDef,
-							   const float damageScale, const int location, int *health, int *armor ) {
+void idPlayer::CalcDamagePoints( idEntity *inflictor, idEntity *attacker, const idDict *damageDef, const float damageScale, const int location, int *health, int *armor ) {
 	int		damage;
 	int		armorSave;
 
 	damageDef->GetInt( "damage", "20", damage );
-	damage = GetDamageForLocation( damage, location );
+	damage = GetDamageForLocation( damage, location ) * painToleranceScale;
 
-	idPlayer *player = attacker->IsType( idPlayer::Type ) ? static_cast<idPlayer*>(attacker) : NULL;
+	idPlayer *player = attacker->IsType( idPlayer::Type ) ? static_cast<idPlayer*>( attacker ) : NULL;
 	if ( !gameLocal.isMultiplayer ) {
 		if ( inflictor != gameLocal.world ) {
 			switch ( g_skill.GetInteger() ) {
@@ -6657,6 +7989,11 @@ void idPlayer::CalcDamagePoints( idEntity *inflictor, idEntity *attacker, const 
 		if ( godmode ) {
 			damage = 0;
 		}
+
+		//Invulnerability is just like god mode
+		if ( PowerUpActive( INVULNERABILITY ) ) {
+			damage = 0;
+		}
 	}
 
 	// inform the attacker that they hit someone
@@ -6665,10 +8002,9 @@ void idPlayer::CalcDamagePoints( idEntity *inflictor, idEntity *attacker, const 
 	// save some from armor
 	if ( !damageDef->GetBool( "noArmor" ) ) {
 		float armor_protection;
-
 		armor_protection = ( gameLocal.isMultiplayer ) ? g_armorProtectionMP.GetFloat() : g_armorProtection.GetFloat();
-
 		armorSave = ceil( damage * armor_protection );
+
 		if ( armorSave >= inventory.armor ) {
 			armorSave = inventory.armor;
 		}
@@ -6686,7 +8022,7 @@ void idPlayer::CalcDamagePoints( idEntity *inflictor, idEntity *attacker, const 
 	}
 
 	// check for team damage
-	if ( gameLocal.gameType == GAME_TDM
+	if ( gameLocal.mpGame.IsGametypeTeamBased()
 		&& !gameLocal.serverInfo.GetBool( "si_teamDamage" )
 		&& !damageDef->GetBool( "noTeam" )
 		&& player
@@ -6715,8 +8051,7 @@ damageDef	an idDict with all the options for damage effects
 inflictor, attacker, dir, and point can be NULL for environmental effects
 ============
 */
-void idPlayer::Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &dir,
-					   const char *damageDefName, const float damageScale, const int location ) {
+void idPlayer::Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &dir, const char *damageDefName, const float damageScale, const int location ) {
 	idVec3		kick;
 	int			damage;
 	int			armorSave;
@@ -6724,6 +8059,8 @@ void idPlayer::Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &di
 	idVec3		damage_from;
 	idVec3		localDamageVector;
 	float		attackerPushScale;
+
+	SetTimeState ts( timeGroup );
 
 	// damage is only processed on server
 	if ( gameLocal.isClient ) {
@@ -6742,9 +8079,11 @@ void idPlayer::Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &di
 	}
 
 	if ( attacker->IsType( idAI::Type ) ) {
-		if ( PowerUpActive( BERSERK ) ) {
+		// no damage if having picked up berserk
+		if ( !weapon.GetEntity()->PowerupFromWeapon() && PowerUpActive( BERSERK ) ) {
 			return;
 		}
+
 		// don't take damage from monsters during influences
 		if ( influenceActive != 0 ) {
 			return;
@@ -6752,7 +8091,7 @@ void idPlayer::Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &di
 	}
 
 	const idDeclEntityDef *damageDef = gameLocal.FindEntityDef( damageDefName, false );
-	if ( !damageDef ) {
+	if ( damageDef == NULL ) {
 		gameLocal.Warning( "Unknown damageDef '%s'", damageDefName );
 		return;
 	}
@@ -6761,12 +8100,18 @@ void idPlayer::Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &di
 		return;
 	}
 
-	CalcDamagePoints( inflictor, attacker, &damageDef->dict, damageScale, location, &damage, &armorSave );
+	// Damaging FX (Ivan) --->
+	if ( allowDmgfxs && !gibbed ) {
+		CheckDamageFx(&damageDef->dict, attacker);
+	}
+	// <---
 
 	// determine knockback
+	knockback = 0;
 	damageDef->dict.GetInt( "knockback", "20", knockback );
 
 	if ( knockback != 0 && !fl.noknockback ) {
+		attackerPushScale = 0.0f;
 		if ( attacker == this ) {
 			damageDef->dict.GetFloat( "attackerPushScale", "0", attackerPushScale );
 		} else {
@@ -6781,6 +8126,8 @@ void idPlayer::Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &di
 		// set the timer so that the player can't cancel out the movement immediately
 		physicsObj.SetKnockBack( idMath::ClampInt( 50, 200, knockback * 2 ) );
 	}
+
+	CalcDamagePoints( inflictor, attacker, &damageDef->dict, damageScale, location, &damage, &armorSave );
 
 	// give feedback on the player view and audibly when armor is helping
 	if ( armorSave ) {
@@ -6801,8 +8148,13 @@ void idPlayer::Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &di
 	}
 
 	if ( g_debugDamage.GetInteger() ) {
-		gameLocal.Printf( "client:%i health:%i damage:%i armor:%i\n",
-			entityNumber, health, damage, armorSave );
+		if ( pm_abilityModifierActive.GetInteger() != 1 ) {
+			gameLocal.Printf( "client:%i health:%i damage:%i armor:%i\n",
+				entityNumber, health, damage, armorSave );
+		} else {
+			gameLocal.Printf( "client:%i health:%i damage:%i armor:%i, pain tolerance:%f\n",
+				entityNumber, health, damage, armorSave, painToleranceScale );
+		}
 	}
 
 	// move the world direction vector to local coordinates
@@ -6820,13 +8172,13 @@ void idPlayer::Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &di
 
 	// do the damage
 	if ( damage > 0 ) {
-
 		if ( !gameLocal.isMultiplayer ) {
-			float scale = g_damageScale.GetFloat();
+			float scale = new_g_damageScale;
 			if ( g_useDynamicProtection.GetBool() && g_skill.GetInteger() < 2 ) {
 				if ( gameLocal.time > lastDmgTime + 500 && scale > 0.25f ) {
 					scale -= 0.05f;
-					g_damageScale.SetFloat( scale );
+					new_g_damageScale = scale;
+
 				}
 			}
 
@@ -6875,6 +8227,7 @@ void idPlayer::Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &di
 
 	lastDamageDef = damageDef->Index();
 	lastDamageDir = damage_from;
+	lastDamageDir.Normalize();
 	lastDamageLocation = location;
 }
 
@@ -6922,6 +8275,10 @@ void idPlayer::Teleport( const idVec3 &origin, const idAngles &angles, idEntity 
 			// kill anything at the new position
 			gameLocal.KillBox( this, true );
 		}
+	}
+
+	if ( PowerUpActive( HELLTIME ) ) {
+		StopHelltime();
 	}
 }
 
@@ -6975,18 +8332,20 @@ float idPlayer::CalcFov( bool honorZoom ) {
 	float fov;
 
 	if ( fxFov ) {
-		return DefaultFov() + 10.0f + cos( ( gameLocal.time + 2000 ) * 0.01 ) * 10.0f;
+		return DefaultFov() + 10.0f + idMath::Cos( ( gameLocal.time + 2000 ) * 0.01 ) * 10.0f;
 	}
 
 	if ( influenceFov ) {
 		return influenceFov;
 	}
 
+	// modified from DentonMod --->
 	if ( zoomFov.IsDone( gameLocal.time ) ) {
-		fov = ( honorZoom && usercmd.buttons & BUTTON_ZOOM ) && weapon.GetEntity() ? weapon.GetEntity()->GetZoomFov() : DefaultFov();
+		fov = ( honorZoom && ( ( usercmd.buttons & BUTTON_ZOOM ) || weaponZoom.startZoom ) ) && weapon.GetEntity() ? weapon.GetEntity()->GetZoomFov() : DefaultFov();
 	} else {
 		fov = zoomFov.GetCurrentValue( gameLocal.time );
 	}
+	// <---
 
 	// bound normal viewsize
 	if ( fov < 1 ) {
@@ -7007,17 +8366,15 @@ history in loggedViewAngles
 ==============
 */
 idAngles idPlayer::GunTurningOffset( void ) {
-	idAngles	a;
+	idAngles a;
 
 	a.Zero();
-
 	if ( gameLocal.framenum < NUM_LOGGED_VIEW_ANGLES ) {
 		return a;
 	}
 
-	idAngles current = loggedViewAngles[ gameLocal.framenum & (NUM_LOGGED_VIEW_ANGLES-1) ];
-
-	idAngles	av, base;
+	idAngles current = loggedViewAngles[ gameLocal.framenum & ( NUM_LOGGED_VIEW_ANGLES - 1 ) ];
+	idAngles av, base;
 	int weaponAngleOffsetAverages;
 	float weaponAngleOffsetScale, weaponAngleOffsetMax;
 
@@ -7027,8 +8384,7 @@ idAngles idPlayer::GunTurningOffset( void ) {
 
 	// calcualte this so the wrap arounds work properly
 	for ( int j = 1 ; j < weaponAngleOffsetAverages ; j++ ) {
-		idAngles a2 = loggedViewAngles[ ( gameLocal.framenum - j ) & (NUM_LOGGED_VIEW_ANGLES-1) ];
-
+		idAngles a2 = loggedViewAngles[ ( gameLocal.framenum - j ) & ( NUM_LOGGED_VIEW_ANGLES - 1 )];
 		idAngles delta = a2 - current;
 
 		if ( delta[1] > 180 ) {
@@ -7057,17 +8413,15 @@ idAngles idPlayer::GunTurningOffset( void ) {
 ==============
 idPlayer::GunAcceleratingOffset
 
-generate a positional offset for the gun based on the movement
+Generate a positional offset for the gun based on the movement
 history in loggedAccelerations
 ==============
 */
 idVec3	idPlayer::GunAcceleratingOffset( void ) {
 	idVec3	ofs;
-
 	float weaponOffsetTime, weaponOffsetScale;
 
 	ofs.Zero();
-
 	weapon.GetEntity()->GetWeaponTimeOffsets( &weaponOffsetTime, &weaponOffsetScale );
 
 	int stop = currentLoggedAccel - NUM_LOGGED_ACCELS;
@@ -7075,7 +8429,7 @@ idVec3	idPlayer::GunAcceleratingOffset( void ) {
 		stop = 0;
 	}
 	for ( int i = currentLoggedAccel-1 ; i > stop ; i-- ) {
-		loggedAccel_t	*acc = &loggedAccel[i&(NUM_LOGGED_ACCELS-1)];
+		loggedAccel_t *acc = &loggedAccel[ i& ( NUM_LOGGED_ACCELS - 1 )];
 
 		float	f;
 		float	t = gameLocal.time - acc->time;
@@ -7084,7 +8438,7 @@ idVec3	idPlayer::GunAcceleratingOffset( void ) {
 		}
 
 		f = t / weaponOffsetTime;
-		f = ( cos( f * 2.0f * idMath::PI ) - 1.0f ) * 0.5f;
+		f = ( idMath::Cos( f * 2.0f * idMath::PI ) - 1.0f ) * 0.5f;
 		ofs += f * weaponOffsetScale * acc->dir;
 	}
 
@@ -7143,7 +8497,7 @@ void idPlayer::CalculateViewWeaponPos( idVec3 &origin, idMat3 &axis ) {
 	if ( delta < LAND_DEFLECT_TIME ) {
 		origin -= gravity * ( landChange*0.25f * delta / LAND_DEFLECT_TIME );
 	} else if ( delta < LAND_DEFLECT_TIME + LAND_RETURN_TIME ) {
-		origin -= gravity * ( landChange*0.25f * (LAND_DEFLECT_TIME + LAND_RETURN_TIME - delta) / LAND_RETURN_TIME );
+		origin -= gravity * ( landChange*0.25f * ( LAND_DEFLECT_TIME + LAND_RETURN_TIME - delta ) / LAND_RETURN_TIME );
 	}
 
 	// speed sensitive idle drift
@@ -7219,7 +8573,7 @@ void idPlayer::OffsetThirdPersonView( float angle, float range, float height, bo
 		focusDist = 1.0f;	// should never happen
 	}
 
-	angles.pitch = - RAD2DEG( atan2( focusPoint.z, focusDist ) );
+	angles.pitch = - RAD2DEG( idMath::ATan( focusPoint.z, focusDist ) );
 	angles.yaw -= angle;
 
 	renderView->vieworg = view;
@@ -7277,13 +8631,12 @@ idPlayer::CalculateFirstPersonView
 ===============
 */
 void idPlayer::CalculateFirstPersonView( void ) {
+	idMat3		axis;
+	idVec3		origin;
+	idAngles	ang;
+
 	if ( ( pm_modelView.GetInteger() == 1 ) || ( ( pm_modelView.GetInteger() == 2 ) && ( health <= 0 ) ) ) {
-		//	Displays the view from the point of view of the "camera" joint in the player model
-
-		idMat3 axis;
-		idVec3 origin;
-		idAngles ang;
-
+		// Displays the view from the point of view of the "camera" joint in the player model
 		ang = viewBobAngles + playerView.AngleOffset();
 		ang.yaw += viewAxis[ 0 ].ToYaw();
 
@@ -7316,7 +8669,7 @@ renderView_t *idPlayer::GetRenderView( void ) {
 ==================
 idPlayer::CalculateRenderView
 
-create the renderView for the current tic
+Create the renderView for the current tic
 ==================
 */
 void idPlayer::CalculateRenderView( void ) {
@@ -7329,11 +8682,11 @@ void idPlayer::CalculateRenderView( void ) {
 	memset( renderView, 0, sizeof( *renderView ) );
 
 	// copy global shader parms
-	for( i = 0; i < MAX_GLOBAL_SHADER_PARMS; i++ ) {
+	for ( i = 0; i < MAX_GLOBAL_SHADER_PARMS; i++ ) {
 		renderView->shaderParms[ i ] = gameLocal.globalShaderParms[ i ];
 	}
 	renderView->globalMaterial = gameLocal.GetGlobalMaterial();
-	renderView->time = gameLocal.time;
+	renderView->time = gameLocal.slow.time;
 
 	// calculate size of 3D view
 	renderView->x = 0;
@@ -7343,14 +8696,16 @@ void idPlayer::CalculateRenderView( void ) {
 	renderView->viewID = 0;
 
 	// check if we should be drawing from a camera's POV
-	if ( !noclip && (gameLocal.GetCamera() || privateCameraView) ) {
+	if ( !noclip && ( gameLocal.GetCamera() || privateCameraView ) ) {
 		// get origin, axis, and fov
 		if ( privateCameraView ) {
 			privateCameraView->GetViewParms( renderView );
 		} else {
 			gameLocal.GetCamera()->GetViewParms( renderView );
 		}
+
 	} else {
+
 		if ( g_stopTime.GetBool() ) {
 			renderView->vieworg = firstPersonViewOrigin;
 			renderView->viewaxis = firstPersonViewAxis;
@@ -7393,8 +8748,8 @@ idPlayer::AddAIKill
 =============
 */
 void idPlayer::AddAIKill( void ) {
-	int max_souls;
-	int ammo_souls;
+	int	ammo_souls;
+	int	max_souls;
 
 	if ( ( weapon_soulcube < 0 ) || ( inventory.weapons & ( 1 << weapon_soulcube ) ) == 0 ) {
 		return;
@@ -7404,6 +8759,7 @@ void idPlayer::AddAIKill( void ) {
 
 	ammo_souls = idWeapon::GetAmmoNumForName( "ammo_souls" );
 	max_souls = inventory.MaxAmmoForAmmoClass( this, "ammo_souls" );
+
 	if ( inventory.ammo[ ammo_souls ] < max_souls ) {
 		inventory.ammo[ ammo_souls ]++;
 		if ( inventory.ammo[ ammo_souls ] >= max_souls ) {
@@ -7466,7 +8822,7 @@ void idPlayer::SetLastHitTime( int time ) {
 	if ( hud ) {
 		if ( MPAim != -1 ) {
 			if ( gameLocal.entities[ MPAim ] && gameLocal.entities[ MPAim ]->IsType( idPlayer::Type ) ) {
-				aimed = static_cast< idPlayer * >( gameLocal.entities[ MPAim ] );
+				aimed = static_cast<idPlayer*>( gameLocal.entities[ MPAim ] );
 			}
 			assert( aimed );
 			// full highlight, no fade till loosing aim
@@ -7479,7 +8835,7 @@ void idPlayer::SetLastHitTime( int time ) {
 			MPAimFadeTime = 0;
 		} else if ( lastMPAim != -1 ) {
 			if ( gameLocal.entities[ lastMPAim ] && gameLocal.entities[ lastMPAim ]->IsType( idPlayer::Type ) ) {
-				aimed = static_cast< idPlayer * >( gameLocal.entities[ lastMPAim ] );
+				aimed = static_cast<idPlayer*>( gameLocal.entities[ lastMPAim ] );
 			}
 			assert( aimed );
 			// start fading right away
@@ -7640,6 +8996,111 @@ void idPlayer::Event_DisableWeapon( void ) {
 
 /*
 ==================
+idPlayer::Event_GiveInventoryItem
+==================
+*/
+void idPlayer::Event_GiveInventoryItem( const char *name ) {
+	GiveInventoryItem( name );
+}
+
+/*
+==================
+idPlayer::Event_RemoveInventoryItem
+==================
+*/
+void idPlayer::Event_RemoveInventoryItem( const char *name ) {
+	RemoveInventoryItem( name );
+}
+
+/*
+==================
+idPlayer::Event_GetIdealWeapon
+==================
+*/
+void idPlayer::Event_GetIdealWeapon( void ) {
+	const char *weapon;
+
+	if ( idealWeapon >= 0 ) {
+		weapon = spawnArgs.GetString( va( "def_weapon%d", idealWeapon ) );
+		idThread::ReturnString( weapon );
+	} else {
+		idThread::ReturnString( "" );
+	}
+}
+
+/*
+==================
+idPlayer::Event_SetPowerupTime
+==================
+*/
+void idPlayer::Event_SetPowerupTime( int powerup, int time ) {
+	if ( time > 0 ) {
+		GivePowerUp( powerup, time );
+	} else {
+		ClearPowerup( powerup );
+	}
+}
+
+/*
+==================
+idPlayer::Event_IsPowerupActive
+==================
+*/
+void idPlayer::Event_IsPowerupActive( int powerup ) {
+	idThread::ReturnInt( this->PowerUpActive( powerup ) ? 1 : 0 );
+}
+
+/*
+==================
+idPlayer::Event_StartWarp
+==================
+*/
+void idPlayer::Event_StartWarp() {
+	playerView.AddWarp( idVec3( 0, 0, 0 ), SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, 100, 1000 );
+}
+
+/*
+==================
+idPlayer::Event_StopHelltime
+==================
+*/
+void idPlayer::Event_StopHelltime( int mode ) {
+	if ( mode == 1 ) {
+		StopHelltime( true );
+	}
+	else {
+		StopHelltime( false );
+	}
+}
+
+/*
+==================
+idPlayer::WeaponAvailable
+==================
+*/
+bool idPlayer::WeaponAvailable( const char *name ) {
+	for ( int i = 0; i < MAX_WEAPONS; i++ ) {
+		if ( inventory.weapons & ( 1 << i ) ) {
+			const char *weap = spawnArgs.GetString( va( "def_weapon%d", i ) );
+			if ( !idStr::Cmp( weap, name ) ) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+/*
+==================
+idPlayer::Event_WeaponAvailable
+==================
+*/
+void idPlayer::Event_WeaponAvailable( const char *name ) {
+	idThread::ReturnInt( WeaponAvailable( name ) ? 1 : 0 );
+}
+
+/*
+==================
 idPlayer::Event_GetCurrentWeapon
 ==================
 */
@@ -7664,7 +9125,7 @@ void idPlayer::Event_GetPreviousWeapon( void ) {
 
 	if ( previousWeapon >= 0 ) {
 		int pw = ( gameLocal.world->spawnArgs.GetBool( "no_Weapons" ) ) ? 0 : previousWeapon;
-		weapon = spawnArgs.GetString( va( "def_weapon%d", pw) );
+		weapon = spawnArgs.GetString( va( "def_weapon%d", pw ) );
 		idThread::ReturnString( weapon );
 	} else {
 		idThread::ReturnString( spawnArgs.GetString( "def_weapon0" ) );
@@ -7686,13 +9147,13 @@ void idPlayer::Event_SelectWeapon( const char *weaponName ) {
 	}
 
 	if ( hiddenWeapon && gameLocal.world->spawnArgs.GetBool( "no_Weapons" ) ) {
-		idealWeapon = weapon_fists;
+		idealWeapon = quickWeapon = weapon_fists;
 		weapon.GetEntity()->HideWeapon();
 		return;
 	}
 
 	weaponNum = -1;
-	for( i = 0; i < MAX_WEAPONS; i++ ) {
+	for ( i = 0; i < MAX_WEAPONS; i++ ) {
 		if ( inventory.weapons & ( 1 << i ) ) {
 			const char *weap = spawnArgs.GetString( va( "def_weapon%d", i ) );
 			if ( !idStr::Cmp( weap, weaponName ) ) {
@@ -7708,6 +9169,9 @@ void idPlayer::Event_SelectWeapon( const char *weaponName ) {
 	}
 
 	hiddenWeapon = false;
+	if (idealWeapon != weaponNum ) {
+		quickWeapon = idealWeapon;
+	}
 	idealWeapon = weaponNum;
 
 	UpdateHudWeapon();
@@ -7767,14 +9231,14 @@ void idPlayer::Event_ExitTeleporter( void ) {
 		return;
 	}
 
-	pushVel = exitEnt->spawnArgs.GetFloat( "push", "300" );
-
 	if ( gameLocal.isServer ) {
 		ServerSendEvent( EVENT_EXIT_TELEPORTER, NULL, false, -1 );
 	}
 
 	SetPrivateCameraView( NULL );
+
 	// setup origin and push according to the exit target
+	pushVel = exitEnt->spawnArgs.GetFloat( "push", "300" );
 	SetOrigin( exitEnt->GetPhysics()->GetOrigin() + idVec3( 0, 0, CM_CLIP_EPSILON ) );
 	SetViewAngles( exitEnt->GetPhysics()->GetAxis().ToAngles() );
 	physicsObj.SetLinearVelocity( exitEnt->GetPhysics()->GetAxis()[ 0 ] * pushVel );
@@ -7806,8 +9270,6 @@ idPlayer::ClientPredictionThink
 ================
 */
 void idPlayer::ClientPredictionThink( void ) {
-	renderEntity_t *headRenderEnt;
-
 	oldFlags = usercmd.flags;
 	oldButtons = usercmd.buttons;
 
@@ -7820,6 +9282,12 @@ void idPlayer::ClientPredictionThink( void ) {
 
 	buttonMask &= usercmd.buttons;
 	usercmd.buttons &= ~buttonMask;
+
+	if ( mountedObject ) {
+		usercmd.forwardmove = 0;
+		usercmd.rightmove = 0;
+		usercmd.upmove = 0;
+	}
 
 	if ( objectiveSystemOpen ) {
 		usercmd.forwardmove = 0;
@@ -7896,10 +9364,9 @@ void idPlayer::ClientPredictionThink( void ) {
 
 	UpdateDeathSkin( false );
 
+	renderEntity_t *headRenderEnt = NULL;
 	if ( head.GetEntity() ) {
 		headRenderEnt = head.GetEntity()->GetRenderEntity();
-	} else {
-		headRenderEnt = NULL;
 	}
 
 	if ( headRenderEnt ) {
@@ -7931,6 +9398,27 @@ void idPlayer::ClientPredictionThink( void ) {
 		UpdateAnimation();
 	}
 
+	if ( enviroSuitLight.IsValid() ) {
+		idAngles lightAng = firstPersonViewAxis.ToAngles();
+		idVec3 lightOrg = firstPersonViewOrigin;
+		const idDict *lightDef = gameLocal.FindEntityDefDict( "envirosuit_light", false );
+
+		idVec3 enviroOffset = lightDef->GetVector( "enviro_offset" );
+		idVec3 enviroAngleOffset = lightDef->GetVector( "enviro_angle_offset" );
+
+		lightOrg += ( enviroOffset.x * firstPersonViewAxis[0] );
+		lightOrg += ( enviroOffset.y * firstPersonViewAxis[1] );
+		lightOrg += ( enviroOffset.z * firstPersonViewAxis[2] );
+		lightAng.pitch += enviroAngleOffset.x;
+		lightAng.yaw += enviroAngleOffset.y;
+		lightAng.roll += enviroAngleOffset.z;
+
+		enviroSuitLight.GetEntity()->GetPhysics()->SetOrigin( lightOrg );
+		enviroSuitLight.GetEntity()->GetPhysics()->SetAxis( lightAng.ToMat3() );
+		enviroSuitLight.GetEntity()->UpdateVisuals();
+		enviroSuitLight.GetEntity()->Present();
+	}
+
 	if ( gameLocal.isMultiplayer ) {
 		DrawPlayerIcons();
 	}
@@ -7944,6 +9432,11 @@ void idPlayer::ClientPredictionThink( void ) {
 	if ( gameLocal.isNewFrame && entityNumber == gameLocal.localClientNum ) {
 		playerView.CalculateShake();
 	}
+
+	// determine if portal sky is in pvs
+	pvsHandle_t	clientPVS = gameLocal.pvs.SetupCurrentPVS( GetPVSAreas(), GetNumPVSAreas() );
+	gameLocal.portalSkyActive = gameLocal.pvs.CheckAreasForPortalSky( clientPVS, GetPhysics()->GetOrigin() );
+	gameLocal.pvs.FreeCurrentPVS( clientPVS );
 }
 
 /*
@@ -8043,6 +9536,11 @@ void idPlayer::WriteToSnapshot( idBitMsgDelta &msg ) const {
 	msg.WriteBits( weaponGone, 1 );
 	msg.WriteBits( isLagged, 1 );
 	msg.WriteBits( isChatting, 1 );
+
+	/* Needed for the scoreboard */
+	msg.WriteBits( carryingFlag, 1 );
+
+	msg.WriteBits( enviroSuitLight.GetSpawnId(), 32 );
 }
 
 /*
@@ -8080,6 +9578,12 @@ void idPlayer::ReadFromSnapshot( const idBitMsgDelta &msg ) {
 	weaponGone = msg.ReadBits( 1 ) != 0;
 	isLagged = msg.ReadBits( 1 ) != 0;
 	isChatting = msg.ReadBits( 1 ) != 0;
+	carryingFlag = msg.ReadBits( 1 ) != 0;
+
+
+	int enviroSpawnId;
+	enviroSpawnId = msg.ReadBits( 32 );
+	enviroSuitLight.SetSpawnId( enviroSpawnId );
 
 	// no msg reading below this
 
@@ -8092,7 +9596,7 @@ void idPlayer::ReadFromSnapshot( const idBitMsgDelta &msg ) {
 	}
 	// if not a local client assume the client has all ammo types
 	if ( entityNumber != gameLocal.localClientNum ) {
-		for( i = 0; i < AMMO_NUMTYPES; i++ ) {
+		for ( i = 0; i < AMMO_NUMTYPES; i++ ) {
 			inventory.ammo[ i ] = 999;
 		}
 	}
@@ -8131,8 +9635,10 @@ void idPlayer::ReadFromSnapshot( const idBitMsgDelta &msg ) {
 		if ( stateHitch ) {
 			lastDmgTime = gameLocal.time;
 		} else {
+
 			// damage feedback
-			const idDeclEntityDef *def = static_cast<const idDeclEntityDef *>( declManager->DeclByIndex( DECL_ENTITYDEF, lastDamageDef, false ) );
+			const idDeclEntityDef *def = static_cast<const idDeclEntityDef*>( declManager->DeclByIndex( DECL_ENTITYDEF, lastDamageDef, false ) );
+			
 			if ( def ) {
 				playerView.DamageImpulse( lastDamageDir * viewAxis.Transpose(), &def->dict );
 				AI_PAIN = Pain( NULL, NULL, oldHealth - health, lastDamageDir, lastDamageLocation );
@@ -8182,13 +9688,13 @@ void idPlayer::WritePlayerStateToSnapshot( idBitMsgDelta &msg ) const {
 	msg.WriteByte( bobCycle );
 	msg.WriteInt( stepUpTime );
 	msg.WriteFloat( stepUpDelta );
-	msg.WriteShort( inventory.weapons );
+	msg.WriteInt( inventory.weapons );
 	msg.WriteByte( inventory.armor );
 
-	for( i = 0; i < AMMO_NUMTYPES; i++ ) {
+	for ( i = 0; i < AMMO_NUMTYPES; i++ ) {
 		msg.WriteBits( inventory.ammo[i], ASYNC_PLAYER_INV_AMMO_BITS );
 	}
-	for( i = 0; i < MAX_WEAPONS; i++ ) {
+	for ( i = 0; i < MAX_WEAPONS; i++ ) {
 		msg.WriteBits( inventory.clip[i], ASYNC_PLAYER_INV_CLIP_BITS );
 	}
 }
@@ -8204,16 +9710,16 @@ void idPlayer::ReadPlayerStateFromSnapshot( const idBitMsgDelta &msg ) {
 	bobCycle = msg.ReadByte();
 	stepUpTime = msg.ReadInt();
 	stepUpDelta = msg.ReadFloat();
-	inventory.weapons = msg.ReadShort();
+	inventory.weapons = msg.ReadInt();
 	inventory.armor = msg.ReadByte();
 
-	for( i = 0; i < AMMO_NUMTYPES; i++ ) {
+	for ( i = 0; i < AMMO_NUMTYPES; i++ ) {
 		ammo = msg.ReadBits( ASYNC_PLAYER_INV_AMMO_BITS );
 		if ( gameLocal.time >= inventory.ammoPredictTime ) {
 			inventory.ammo[ i ] = ammo;
 		}
 	}
-	for( i = 0; i < MAX_WEAPONS; i++ ) {
+	for ( i = 0; i < MAX_WEAPONS; i++ ) {
 		inventory.clip[i] = msg.ReadBits( ASYNC_PLAYER_INV_CLIP_BITS );
 	}
 }
@@ -8224,13 +9730,12 @@ idPlayer::ServerReceiveEvent
 ================
 */
 bool idPlayer::ServerReceiveEvent( int event, int time, const idBitMsg &msg ) {
-
 	if ( idEntity::ServerReceiveEvent( event, time, msg ) ) {
 		return true;
 	}
 
 	// client->server events
-	switch( event ) {
+	switch ( event ) {
 		case EVENT_IMPULSE: {
 			PerformImpulse( msg.ReadBits( 6 ) );
 			return true;
@@ -8259,12 +9764,18 @@ bool idPlayer::ClientReceiveEvent( int event, int time, const idBitMsg &msg ) {
 			return true;
 		case EVENT_POWERUP: {
 			powerup = msg.ReadShort();
-			start = msg.ReadBits( 1 ) != 0;
+			start = msg.ReadBits(1) != 0;
 			if ( start ) {
 				GivePowerUp( powerup, 0 );
 			} else {
 				ClearPowerup( powerup );
 			}
+			return true;
+		}
+		case EVENT_PICKUPNAME: {
+			char buf[MAX_EVENT_PARAM_SIZE];
+			msg.ReadString( buf, MAX_EVENT_PARAM_SIZE );
+			inventory.AddPickupName( buf, "", this );
 			return true;
 		}
 		case EVENT_SPECTATE: {
@@ -8293,10 +9804,9 @@ idPlayer::Hide
 ================
 */
 void idPlayer::Hide( void ) {
-	idWeapon *weap;
-
 	idActor::Hide();
-	weap = weapon.GetEntity();
+
+	idWeapon *weap = weapon.GetEntity();
 	if ( weap ) {
 		weap->HideWorldModel();
 	}
@@ -8308,10 +9818,9 @@ idPlayer::Show
 ================
 */
 void idPlayer::Show( void ) {
-	idWeapon *weap;
-
 	idActor::Show();
-	weap = weapon.GetEntity();
+
+	idWeapon *weap = weapon.GetEntity();
 	if ( weap ) {
 		weap->ShowWorldModel();
 	}
@@ -8463,7 +9972,7 @@ void idPlayer::Event_LevelTrigger( void ) {
 	mapName.StripPath();
 	mapName.StripFileExtension();
 	for ( int i = inventory.levelTriggers.Num() - 1; i >= 0; i-- ) {
-		if ( idStr::Icmp( mapName, inventory.levelTriggers[i].levelName) == 0 ){
+		if ( idStr::Icmp( mapName, inventory.levelTriggers[i].levelName ) == 0 ){
 			idEntity *ent = gameLocal.FindEntity( inventory.levelTriggers[i].triggerName );
 			if ( ent ) {
 				ent->PostEventMS( &EV_Activate, 1, this );
@@ -8478,22 +9987,7 @@ idPlayer::Event_Gibbed
 ===============
 */
 void idPlayer::Event_Gibbed( void ) {
-}
-
-/*
-==================
-idPlayer::Event_GetIdealWeapon
-==================
-*/
-void idPlayer::Event_GetIdealWeapon( void ) {
-	const char *weapon;
-
-	if ( idealWeapon >= 0 ) {
-		weapon = spawnArgs.GetString( va( "def_weapon%d", idealWeapon ) );
-		idThread::ReturnString( weapon );
-	} else {
-		idThread::ReturnString( "" );
-	}
+	// do nothing
 }
 
 /*
@@ -8508,6 +10002,7 @@ void idPlayer::UpdatePlayerIcons( void ) {
 	} else {
 		isLagged = false;
 	}
+	// TODO: chatting, PDA, etc?
 }
 
 /*
@@ -8520,6 +10015,12 @@ void idPlayer::DrawPlayerIcons( void ) {
 		playerIcon.FreeIcon();
 		return;
 	}
+
+	// Never draw icons for hidden players.
+	if ( this->IsHidden() ) {
+		return;
+	}
+
 	playerIcon.Draw( this, headJoint );
 }
 
@@ -8539,5 +10040,145 @@ idPlayer::NeedsIcon
 */
 bool idPlayer::NeedsIcon( void ) {
 	// local clients don't render their own icons... they're only info for other clients
-	return entityNumber != gameLocal.localClientNum && ( isLagged || isChatting );
+	// always draw icons in CTF games
+	return entityNumber != gameLocal.localClientNum && ( ( g_CTFArrows.GetBool() && gameLocal.mpGame.IsGametypeFlagBased() && !IsHidden() && !AI_DEAD ) || ( isLagged || isChatting ) );
+}
+
+/*
+===============
+idPlayer::DropFlag()
+==============
+*/
+void idPlayer::DropFlag( void ) {
+	if ( !carryingFlag || !gameLocal.isMultiplayer || !gameLocal.mpGame.IsGametypeFlagBased() ) {
+		return;
+	}
+
+	idEntity *entity = gameLocal.mpGame.GetTeamFlag( 1 - this->latchedTeam );
+	if ( entity ) {
+		idItemTeam * item = static_cast<idItemTeam*>( entity );
+
+		if ( item->carried && !item->dropped ) {
+			item->Drop( health <= 0 );
+			carryingFlag = false;
+		}
+	}
+
+}
+
+/*
+===============
+idPlayer::ReturnFlag()
+==============
+*/
+void idPlayer::ReturnFlag() {
+	if ( !carryingFlag || !gameLocal.isMultiplayer || !gameLocal.mpGame.IsGametypeFlagBased() ) {
+		return;
+	}
+
+	idEntity *entity = gameLocal.mpGame.GetTeamFlag( 1 - this->latchedTeam );
+	if ( entity ) {
+		idItemTeam * item = static_cast<idItemTeam*>( entity );
+
+		if ( item->carried && !item->dropped ) {
+			item->Return();
+			carryingFlag = false;
+		}
+	}
+}
+
+/*
+===============
+idPlayer::FreeModelDef
+==============
+*/
+void idPlayer::FreeModelDef( void ) {
+	idAFEntity_Base::FreeModelDef();
+	if ( gameLocal.isMultiplayer && gameLocal.mpGame.IsGametypeFlagBased() ) {
+		playerIcon.FreeIcon();
+	}
+}
+
+/*
+==================
+idPlayer::Event_GetImpulseKey
+
+ * added from DentonMod
+==================
+*/
+void idPlayer::Event_GetImpulseKey( void ) {
+	idThread::ReturnInt( usercmd.impulse );
+}
+
+/*
+===============
+idPlayer::ManageActiveAbilities
+
+Active abilities are always active and don't consume any energy
+===============
+*/
+void idPlayer::ManageActiveAbilities( void ) {
+	
+	// Tolerance
+	painToleranceScale = 1.0f;
+	if ( pm_abilityModifierActive.GetInteger() == 1 ) {
+		PainTolerance();
+	}
+
+	// Health Regeneration
+	if ( pm_abilityModifierActive.GetInteger() == 2 ) {
+		RegenerateHealth();
+	}
+
+}
+
+/*
+===============
+idPlayer::Tolerance
+===============
+*/
+void idPlayer::PainTolerance( void ) {
+	// We just update painToleranceScale here,
+	// rest is done in CalcDamagePoints.
+
+	if ( g_skill.GetInteger() < 2 ) {
+		// take 50-75 % of the damage
+		painToleranceScale =  0.5f + ( 0.25f * gameLocal.random.RandomFloat() );
+	} else {
+		// take 75-100 % of the damage
+		painToleranceScale =  0.75f + ( 0.25f * gameLocal.random.RandomFloat() );
+	}
+}
+
+/*
+===============
+idPlayer::RegenerateHealth
+===============
+*/
+void idPlayer::RegenerateHealth( void ) {
+
+	if ( gameLocal.time > nextHealthRegen && 
+		 gameLocal.time > ( lastDmgTime + ( pm_healthRegenDelay.GetInteger() * 1000 ) ) && 
+		 health < pm_healthRegenLimit.GetInteger() && 
+		 health < prevHeatlh ) 
+	{ 
+		int currentRegenStep = 0;
+
+		if ( pm_healthRegenSteps.GetInteger() > 1 ) {
+			currentRegenStep = pm_healthRegenLimit.GetInteger() / pm_healthRegenSteps.GetInteger();
+			for ( int i = 0; i < pm_healthRegenSteps.GetInteger(); i++ )
+				if ( health > currentRegenStep )
+					currentRegenStep += ( pm_healthRegenLimit.GetInteger() / pm_healthRegenSteps.GetInteger() );
+		}
+
+		health += pm_healthRegenAmount.GetInteger();
+
+		if ( pm_healthRegenSteps.GetInteger() > 1 && health > currentRegenStep ) {
+			health = currentRegenStep;
+		}
+		if ( health >= pm_healthRegenLimit.GetInteger() ) {
+			health = pm_healthRegenLimit.GetInteger();
+		}
+		nextHealthRegen = gameLocal.time + pm_healthRegenTime.GetInteger() * 1000;
+	}
 }

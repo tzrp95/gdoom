@@ -39,10 +39,12 @@ If you have questions concerning this license or the applicable additional terms
 ===================================================================================
 */
 
-
 class idSecurityCamera : public idEntity {
 public:
 	CLASS_PROTOTYPE( idSecurityCamera );
+
+							idSecurityCamera();
+							 ~idSecurityCamera( void );
 
 	void					Spawn( void );
 
@@ -51,14 +53,12 @@ public:
 
 	virtual void			Think( void );
 
-	virtual renderView_t *	GetRenderView();
+	virtual renderView_t	*GetRenderView();
 	virtual void			Killed( idEntity *inflictor, idEntity *attacker, int damage, const idVec3 &dir, int location );
 	virtual bool			Pain( idEntity *inflictor, idEntity *attacker, int damage, const idVec3 &dir, int location );
 	virtual void			Present( void );
 
-
 private:
-
 	enum { SCANNING, LOSINGINTEREST, ALERT, ACTIVATED };
 
 	float					angle;

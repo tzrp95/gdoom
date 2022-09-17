@@ -34,7 +34,7 @@ If you have questions concerning this license or the applicable additional terms
 /*
 ===============================================================================
 
-  Generic sound emitter.
+	Generic sound emitter.
 
 ===============================================================================
 */
@@ -43,36 +43,34 @@ class idSound : public idEntity {
 public:
 	CLASS_PROTOTYPE( idSound );
 
-					idSound( void );
+						idSound( void );
 
-	void			Save( idSaveGame *savefile ) const;
-	void			Restore( idRestoreGame *savefile );
+	void				Save( idSaveGame *savefile ) const;
+	void				Restore( idRestoreGame *savefile );
 
-	virtual void	UpdateChangeableSpawnArgs( const idDict *source );
+	virtual void		UpdateChangeableSpawnArgs( const idDict *source );
 
-	void			Spawn( void );
+	void				Spawn( void );
+	void				Think( void );
+	void				SetSound( const char *sound, int channel = SND_CHANNEL_ANY );
 
-	void			ToggleOnOff( idEntity *other, idEntity *activator );
-	void			Think( void );
-	void			SetSound( const char *sound, int channel = SND_CHANNEL_ANY );
-
-	virtual void	ShowEditingDialog( void );
+	virtual void		ShowEditingDialog( void );
 
 private:
-	float			lastSoundVol;
-	float			soundVol;
-	float			random;
-	float			wait;
-	bool			timerOn;
-	idVec3			shakeTranslate;
-	idAngles		shakeRotate;
-	int				playingUntilTime;
+	float				lastSoundVol;
+	float				soundVol;
+	float				random;
+	float				wait;
+	bool				timerOn;
+	idVec3				shakeTranslate;
+	idAngles			shakeRotate;
+	int					playingUntilTime;
 
-	void			Event_Trigger( idEntity *activator );
-	void			Event_Timer( void );
-	void			Event_On( void );
-	void			Event_Off( void );
-	void			DoSound( bool play );
+	void				Event_Trigger( idEntity *activator );
+	void				Event_Timer( void );
+	void				Event_On( void );
+	void				Event_Off( void );
+	void				DoSound( bool play );
 };
 
 #endif /* !__GAME_SOUND_H__ */

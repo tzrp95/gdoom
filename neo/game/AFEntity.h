@@ -33,14 +33,15 @@ If you have questions concerning this license or the applicable additional terms
 #include "physics/Force_Constant.h"
 #include "Entity.h"
 #include "AF.h"
+#include "Fx.h"
 
 /*
 ===============================================================================
 
-idMultiModelAF
+	idMultiModelAF
 
-Entity using multiple separate visual models animated with a single
-articulated figure. Only used for debugging!
+	Entity using multiple separate visual models animated with a single
+	articulated figure. Only used for debugging!
 
 ===============================================================================
 */
@@ -62,17 +63,16 @@ protected:
 	void					SetModelForId( int id, const idStr &modelName );
 
 private:
-	idList<idRenderModel *>	modelHandles;
+	idList<idRenderModel*>	modelHandles;
 	idList<int>				modelDefHandles;
 };
-
 
 /*
 ===============================================================================
 
-idChain
+	idChain
 
-Chain hanging down from the ceiling. Only used for debugging!
+	Chain hanging down from the ceiling. Only used for debugging!
 
 ===============================================================================
 */
@@ -87,11 +87,10 @@ protected:
 	void					BuildChain( const idStr &name, const idVec3 &origin, float linkLength, float linkWidth, float density, int numLinks, bool bindToWorld = true );
 };
 
-
 /*
 ===============================================================================
 
-idAFAttachment
+	idAFAttachment
 
 ===============================================================================
 */
@@ -110,7 +109,7 @@ public:
 
 	void					SetBody( idEntity *bodyEnt, const char *headModel, jointHandle_t attachJoint );
 	void					ClearBody( void );
-	idEntity *				GetBody( void ) const;
+	idEntity				*GetBody( void ) const;
 
 	virtual void			Think( void );
 
@@ -124,25 +123,26 @@ public:
 	virtual void			AddForce( idEntity *ent, int id, const idVec3 &point, const idVec3 &force );
 
 	virtual	void			Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &dir, const char *damageDefName, const float damageScale, const int location );
-	virtual void			AddDamageEffect( const trace_t &collision, const idVec3 &velocity, const char *damageDefName );
+	
+	// added soundEnt flag from DentonMod
+	virtual void			AddDamageEffect( const trace_t &collision, const idVec3 &velocity, const char *damageDefName, idEntity *soundEnt=NULL );
 
 	void					SetCombatModel( void );
-	idClipModel *			GetCombatModel( void ) const;
+	idClipModel				*GetCombatModel( void ) const;
 	virtual void			LinkCombat( void );
 	virtual void			UnlinkCombat( void );
 
 protected:
-	idEntity *				body;
-	idClipModel *			combatModel;	// render model for hit detection of head
+	idEntity				*body;
+	idClipModel				*combatModel;	// render model for hit detection of head
 	int						idleAnim;
 	jointHandle_t			attachJoint;
 };
 
-
 /*
 ===============================================================================
 
-idAFEntity_Base
+	idAFEntity_Base
 
 ===============================================================================
 */
@@ -170,11 +170,11 @@ public:
 
 	virtual bool			LoadAF( void );
 	bool					IsActiveAF( void ) const { return af.IsActive(); }
-	const char *			GetAFName( void ) const { return af.GetName(); }
-	idPhysics_AF *			GetAFPhysics( void ) { return af.GetPhysics(); }
+	const char				*GetAFName( void ) const { return af.GetName(); }
+	idPhysics_AF			*GetAFPhysics( void ) { return af.GetPhysics(); }
 
 	void					SetCombatModel( void );
-	idClipModel *			GetCombatModel( void ) const;
+	idClipModel				*GetCombatModel( void ) const;
 							// contents of combatModel can be set to 0 or re-enabled (mp)
 	void					SetCombatContents( bool enable );
 	virtual void			LinkCombat( void );
@@ -194,7 +194,7 @@ public:
 
 protected:
 	idAF					af;				// articulated figure
-	idClipModel *			combatModel;	// render model for hit detection
+	idClipModel				*combatModel;	// render model for hit detection
 	int						combatModelContents;
 	idVec3					spawnOrigin;	// spawn origin
 	idMat3					spawnAxis;		// rotation axis used when spawned
@@ -206,7 +206,7 @@ protected:
 /*
 ===============================================================================
 
-idAFEntity_Gibbable
+	idAFEntity_Gibbable
 
 ===============================================================================
 */
@@ -226,16 +226,33 @@ public:
 	void					Restore( idRestoreGame *savefile );
 	virtual void			Present( void );
 	virtual	void			Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &dir, const char *damageDefName, const float damageScale, const int location );
+	void					SetThrown( bool isThrown );
+	virtual bool			Collide( const trace_t &collision, const idVec3 &velocity );
 	virtual void			SpawnGibs( const idVec3 &dir, const char *damageDefName );
 
-protected:
-	idRenderModel *			skeletonModel;
-	int						skeletonModelDefHandle;
-	bool					gibbed;
+	bool					IsGibbed() { return gibbed; };
 
+protected:
+	idRenderModel			*skeletonModel;
+	int						skeletonModelDefHandle;
+	int						gibHealth;
+	bool					gibbed;
+	bool					wasThrown;
+
+	// Damaging FX (Ivan) --->
+	bool					allowDmgfxs;
+	idList< idEntityPtr<idDamagingFx> >	dmgFxEntities;
+
+	void					StartDamageFx( const char *defName, idEntity *attacker );
+	void					StopDamageFxs( void );
+	void					KilledDamageFxs( void );
+	void					RemoveDamageFxs( void );
+	void					CheckDamageFx( const idDict *damageDef, idEntity *attacker );
+	// <---
+
+	virtual void			Killed( idEntity *inflictor, idEntity *attacker, int damage, const idVec3 &dir, int location );
 	virtual void			Gib( const idVec3 &dir, const char *damageDefName );
 	void					InitSkeletonModel( void );
-
 	void					Event_Gib( const char *damageDefName );
 };
 
@@ -268,11 +285,10 @@ private:
 	bool					keepRunningPhysics;
 };
 
-
 /*
 ===============================================================================
 
-idAFEntity_WithAttachedHead
+	idAFEntity_WithAttachedHead
 
 ===============================================================================
 */
@@ -303,18 +319,17 @@ public:
 protected:
 	virtual void			Gib( const idVec3 &dir, const char *damageDefName );
 
-private:
+public:
 	idEntityPtr<idAFAttachment>	head;
 
 	void					Event_Gib( const char *damageDefName );
 	void					Event_Activate( idEntity *activator );
 };
 
-
 /*
 ===============================================================================
 
-idAFEntity_Vehicle
+	idAFEntity_Vehicle
 
 ===============================================================================
 */
@@ -329,22 +344,21 @@ public:
 	void					Use( idPlayer *player );
 
 protected:
-	idPlayer *				player;
+	idPlayer				*player;
 	jointHandle_t			eyesJoint;
 	jointHandle_t			steeringWheelJoint;
 	float					wheelRadius;
 	float					steerAngle;
 	float					steerSpeed;
-	const idDeclParticle *	dustSmoke;
+	const idDeclParticle	*dustSmoke;
 
 	float					GetSteerAngle( void );
 };
 
-
 /*
 ===============================================================================
 
-idAFEntity_VehicleSimple
+	idAFEntity_VehicleSimple
 
 ===============================================================================
 */
@@ -360,17 +374,16 @@ public:
 	virtual void			Think( void );
 
 protected:
-	idClipModel *			wheelModel;
-	idAFConstraint_Suspension *	suspension[4];
-	jointHandle_t			wheelJoints[4];
-	float					wheelAngles[4];
+	idClipModel					*wheelModel;
+	idAFConstraint_Suspension	*suspension[4];
+	jointHandle_t				wheelJoints[4];
+	float						wheelAngles[4];
 };
-
 
 /*
 ===============================================================================
 
-idAFEntity_VehicleFourWheels
+	idAFEntity_VehicleFourWheels
 
 ===============================================================================
 */
@@ -385,17 +398,16 @@ public:
 	virtual void			Think( void );
 
 protected:
-	idAFBody *				wheels[4];
-	idAFConstraint_Hinge *	steering[2];
+	idAFBody				*wheels[4];
+	idAFConstraint_Hinge	*steering[2];
 	jointHandle_t			wheelJoints[4];
 	float					wheelAngles[4];
 };
 
-
 /*
 ===============================================================================
 
-idAFEntity_VehicleSixWheels
+	idAFEntity_VehicleSixWheels
 
 ===============================================================================
 */
@@ -409,18 +421,51 @@ public:
 	void					Spawn( void );
 	virtual void			Think( void );
 
+	float					force;
+	float					velocity;
+	float					steerAngle;
+
 private:
-	idAFBody *				wheels[6];
-	idAFConstraint_Hinge *	steering[4];
+	idAFBody				*wheels[6];
+	idAFConstraint_Hinge	*steering[4];
 	jointHandle_t			wheelJoints[6];
 	float					wheelAngles[6];
 };
 
+/*
+===============================================================================
+
+	idAFEntity_VehicleAutomated
+
+===============================================================================
+*/
+
+class idAFEntity_VehicleAutomated : public idAFEntity_VehicleSixWheels {
+public:
+	CLASS_PROTOTYPE( idAFEntity_VehicleAutomated );
+
+	void					Spawn( void );
+	void					PostSpawn( void );
+	virtual void			Think( void );
+
+private:
+
+	idEntity				*waypoint;
+	float					steeringSpeed;
+	float					currentSteering;
+	float					idealSteering;
+	float					originHeight;
+
+	void					Event_SetVelocity( float _velocity );
+	void					Event_SetTorque( float _torque );
+	void					Event_SetSteeringSpeed( float _steeringSpeed );
+	void					Event_SetWayPoint( idEntity *_waypoint );
+};
 
 /*
 ===============================================================================
 
-idAFEntity_SteamPipe
+	idAFEntity_SteamPipe
 
 ===============================================================================
 */
@@ -449,11 +494,10 @@ private:
 	void					InitSteamRenderEntity( void );
 };
 
-
 /*
 ===============================================================================
 
-idAFEntity_ClawFourFingers
+	idAFEntity_ClawFourFingers
 
 ===============================================================================
 */
@@ -469,10 +513,96 @@ public:
 	void					Restore( idRestoreGame *savefile );
 
 private:
-	idAFConstraint_Hinge *	fingers[4];
+	idAFConstraint_Hinge	*fingers[4];
 
 	void					Event_SetFingerAngle( float angle );
 	void					Event_StopFingers( void );
+};
+
+/*
+===============================================================================
+
+	idHarvestable
+
+	idHarvestable contains all of the code required to turn an entity into a harvestable
+	entity. The entity must create an instance of this class and call the appropriate
+	interface methods at the correct time.
+
+===============================================================================
+*/
+
+class idHarvestable : public idEntity {
+public:
+	CLASS_PROTOTYPE( idHarvestable );
+
+							idHarvestable();
+							~idHarvestable();
+
+	void					Spawn();
+	void					Init( idEntity *parent );
+	void					Save( idSaveGame *savefile ) const;
+	void					Restore( idRestoreGame *savefile );
+
+	void					SetParent( idEntity *parent );
+
+	void					Think();
+	void					Gib();
+
+protected:
+	idEntityPtr<idEntity>	parentEnt;
+	float					triggersize;
+	idClipModel				*trigger;
+	float					giveDelay;
+	float					removeDelay;
+	bool					given;
+
+	idEntityPtr<idPlayer>	player;
+	int						startTime;
+
+	bool					fxFollowPlayer;
+	idEntityPtr<idEntityFx>	fx;
+	idStr					fxOrient;
+
+protected:
+	void					BeginBurn();
+	void					BeginFX();
+	void					CalcTriggerBounds( float size, idBounds &bounds );
+
+	bool					GetFxOrientationAxis( idMat3 &mat );
+
+	void					Event_SpawnHarvestTrigger( void );
+	void					Event_Touch( idEntity *other, trace_t *trace );
+};
+
+/*
+===============================================================================
+
+	idAFEntity_Harvest
+
+===============================================================================
+*/
+
+class idAFEntity_Harvest : public idAFEntity_WithAttachedHead {
+public:
+	CLASS_PROTOTYPE( idAFEntity_Harvest );
+
+							idAFEntity_Harvest();
+							~idAFEntity_Harvest();
+
+	void					Spawn( void );
+
+	void					Save( idSaveGame *savefile ) const;
+	void					Restore( idRestoreGame *savefile );
+
+	virtual void			Think( void );
+
+	virtual void			Gib( const idVec3 &dir, const char *damageDefName );
+
+protected:
+	idEntityPtr<idHarvestable>	harvestEnt;
+protected:
+	void					Event_SpawnHarvestEntity( void );
+
 };
 
 #endif /* !__GAME_AFENTITY_H__ */

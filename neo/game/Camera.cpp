@@ -27,6 +27,7 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 #include "sys/platform.h"
+
 #include "gamesys/SysCvar.h"
 #include "script/Script_Thread.h"
 #include "Player.h"
@@ -36,9 +37,8 @@ If you have questions concerning this license or the applicable additional terms
 /*
 ===============================================================================
 
-  idCamera
-
-  Base class for cameras
+	idCamera
+	Base class for cameras
 
 ===============================================================================
 */
@@ -65,18 +65,20 @@ renderView_t *idCamera::GetRenderView() {
 	return rv;
 }
 
-/***********************************************************************
+/*
+===============================================================================
 
-  idCameraView
+	idCameraView
 
-***********************************************************************/
+===============================================================================
+*/
+
 const idEventDef EV_Camera_SetAttachments( "<getattachments>", NULL );
 
 CLASS_DECLARATION( idCamera, idCameraView )
 	EVENT( EV_Activate,				idCameraView::Event_Activate )
 	EVENT( EV_Camera_SetAttachments, idCameraView::Event_SetAttachments )
 END_CLASS
-
 
 /*
 ===============
@@ -107,8 +109,8 @@ idCameraView::Restore
 */
 void idCameraView::Restore( idRestoreGame *savefile ) {
 	savefile->ReadFloat( fov );
-	savefile->ReadObject( reinterpret_cast<idClass *&>( attachedTo ) );
-	savefile->ReadObject( reinterpret_cast<idClass *&>( attachedView ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( attachedTo ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( attachedView ) );
 }
 
 /*
@@ -127,18 +129,17 @@ idCameraView::Event_Activate
 ================
 */
 void idCameraView::Event_Activate( idEntity *activator ) {
-	if (spawnArgs.GetBool("trigger")) {
-		if (gameLocal.GetCamera() != this) {
+	if ( spawnArgs.GetBool( "trigger" ) ) {
+		if ( gameLocal.GetCamera() != this ) {
 			if ( g_debugCinematic.GetBool() ) {
 				gameLocal.Printf( "%d: '%s' start\n", gameLocal.framenum, GetName() );
 			}
-
-			gameLocal.SetCamera(this);
+			gameLocal.SetCamera( this );
 		} else {
 			if ( g_debugCinematic.GetBool() ) {
 				gameLocal.Printf( "%d: '%s' stop\n", gameLocal.framenum, GetName() );
 			}
-			gameLocal.SetCamera(NULL);
+			gameLocal.SetCamera( NULL );
 		}
 	}
 }
@@ -152,14 +153,14 @@ void idCameraView::Stop( void ) {
 	if ( g_debugCinematic.GetBool() ) {
 		gameLocal.Printf( "%d: '%s' stop\n", gameLocal.framenum, GetName() );
 	}
-	gameLocal.SetCamera(NULL);
+
+	gameLocal.SetCamera( NULL );
 	ActivateTargets( gameLocal.GetLocalPlayer() );
 }
 
-
 /*
 =====================
-idCameraView::Spawn
+idCameraView::SetAttachment
 =====================
 */
 void idCameraView::SetAttachment( idEntity **e, const char *p  ) {
@@ -169,7 +170,6 @@ void idCameraView::SetAttachment( idEntity **e, const char *p  ) {
 	}
 }
 
-
 /*
 =====================
 idCameraView::Spawn
@@ -177,15 +177,15 @@ idCameraView::Spawn
 */
 void idCameraView::Spawn( void ) {
 	// if no target specified use ourself
-	const char *cam = spawnArgs.GetString("cameraTarget");
-	if ( strlen ( cam ) == 0) {
-		spawnArgs.Set("cameraTarget", spawnArgs.GetString("name"));
+	const char *cam = spawnArgs.GetString( "cameraTarget" );
+	if ( strlen ( cam ) == 0 ) {
+		spawnArgs.Set( "cameraTarget", spawnArgs.GetString( "name" ) );
 	}
-	fov = spawnArgs.GetFloat("fov", "90");
+	fov = spawnArgs.GetFloat( "fov", "90" );
 
 	PostEventMS( &EV_Camera_SetAttachments, 0 );
 
-	UpdateChangeableSpawnArgs(NULL);
+	UpdateChangeableSpawnArgs( NULL );
 }
 
 /*
@@ -196,7 +196,7 @@ idCameraView::GetViewParms
 void idCameraView::GetViewParms( renderView_t *view ) {
 	assert( view );
 
-	if (view == NULL) {
+	if ( view == NULL ) {
 		return;
 	}
 
@@ -224,7 +224,7 @@ void idCameraView::GetViewParms( renderView_t *view ) {
 /*
 ===============================================================================
 
-  idCameraAnim
+	idCameraAnim
 
 ===============================================================================
 */
@@ -252,7 +252,6 @@ idCameraAnim::idCameraAnim() {
 	cycle = 1;
 	starttime = 0;
 	activator = NULL;
-
 }
 
 /*
@@ -384,7 +383,7 @@ void idCameraAnim::LoadAnim( void ) {
 	parser.ExpectTokenString( "cuts" );
 	parser.ExpectTokenString( "{" );
 	cameraCuts.SetNum( numCuts );
-	for( i = 0; i < numCuts; i++ ) {
+	for ( i = 0; i < numCuts; i++ ) {
 		cameraCuts[ i ] = parser.ParseInt();
 		if ( ( cameraCuts[ i ] < 1 ) || ( cameraCuts[ i ] >= numFrames ) ) {
 			parser.Error( "Invalid camera cut" );
@@ -396,7 +395,7 @@ void idCameraAnim::LoadAnim( void ) {
 	parser.ExpectTokenString( "camera" );
 	parser.ExpectTokenString( "{" );
 	camera.SetNum( numFrames );
-	for( i = 0; i < numFrames; i++ ) {
+	for ( i = 0; i < numFrames; i++ ) {
 		parser.Parse1DMatrix( 3, camera[ i ].t.ToFloatPtr() );
 		parser.Parse1DMatrix( 3, camera[ i ].q.ToFloatPtr() );
 		camera[ i ].fov = parser.ParseFloat();
@@ -424,7 +423,7 @@ void idCameraAnim::LoadAnim( void ) {
 	float diff_q, last_q, q;
 	diff_t = last_t = 0.0f;
 	diff_q = last_q = 0.0f;
-	for( i = 1; i < numFrames; i++ ) {
+	for ( i = 1; i < numFrames; i++ ) {
 		t = ( camera[ i ].t - camera[ i - 1 ].t ).Length();
 		q = ( camera[ i ].q.ToQuat() - camera[ i - 1 ].q.ToQuat() ).Length();
 		diff_t = t - last_t;
@@ -468,7 +467,7 @@ void idCameraAnim::Start( void ) {
 	BecomeActive( TH_THINK );
 
 	// if the player has already created the renderview for this frame, have him update it again so that the camera starts this frame
-	if ( gameLocal.GetLocalPlayer()->GetRenderView()->time == gameLocal.time ) {
+	if (  gameLocal.GetLocalPlayer()->GetRenderView() && gameLocal.GetLocalPlayer()->GetRenderView()->time == gameLocal.time ) {	// make sure render view is valid.
 		gameLocal.GetLocalPlayer()->CalculateRenderView();
 	}
 }
@@ -564,6 +563,8 @@ void idCameraAnim::GetViewParms( renderView_t *view ) {
 		return;
 	}
 
+	SetTimeState ts( timeGroup );
+
 	if ( frameRate == USERCMD_HZ ) {
 		frameTime	= gameLocal.time - starttime;
 		frame		= frameTime / gameLocal.msec;
@@ -577,7 +578,7 @@ void idCameraAnim::GetViewParms( renderView_t *view ) {
 	// skip any frames where camera cuts occur
 	realFrame = frame;
 	cut = 0;
-	for( i = 0; i < cameraCuts.Num(); i++ ) {
+	for ( i = 0; i < cameraCuts.Num(); i++ ) {
 		if ( frame < cameraCuts[ i ] ) {
 			break;
 		}
@@ -591,7 +592,7 @@ void idCameraAnim::GetViewParms( renderView_t *view ) {
 		int prevCut;
 
 		prevCut = 0;
-		for( i = 0; i < cameraCuts.Num(); i++ ) {
+		for ( i = 0; i < cameraCuts.Num(); i++ ) {
 			if ( prevFrame < cameraCuts[ i ] ) {
 				break;
 			}
