@@ -93,7 +93,7 @@ private:
 	float				randomTorque;
 	bool				playerOnly;
 	bool				monsterOnly;
-	idClipModel *		clipModel;
+	idClipModel			*clipModel;
 };
 
 #endif /* !__FORCE_FIELD_H__ */

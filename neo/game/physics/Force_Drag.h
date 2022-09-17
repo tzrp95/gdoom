@@ -53,7 +53,7 @@ public:
 						// set position to drag towards
 	void				SetDragPosition( const idVec3 &pos );
 						// get the position dragged towards
-	const idVec3 &		GetDragPosition( void ) const;
+	const idVec3		&GetDragPosition( void ) const;
 						// get the position on the dragged physics object
 	const idVec3		GetDraggedPosition( void ) const;
 
@@ -67,7 +67,7 @@ private:
 	float				damping;
 
 	// positioning
-	idPhysics *			physics;		// physics object
+	idPhysics			*physics;		// physics object
 	int					id;				// clip model id of physics object
 	idVec3				p;				// position on clip model
 	idVec3				dragPosition;	// drag towards this position

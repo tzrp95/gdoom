@@ -27,6 +27,7 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 #include "sys/platform.h"
+
 #include "Game_local.h"
 
 #include "physics/Physics.h"
@@ -75,6 +76,7 @@ idPhysics::SnapTimeToPhysicsFrame
 */
 int idPhysics::SnapTimeToPhysicsFrame( int t ) {
 	int s;
+
 	s = t + USERCMD_MSEC - 1;
 	return ( s - s % USERCMD_MSEC );
 }

@@ -93,7 +93,7 @@ idPhysics_Static::Restore
 ================
 */
 void idPhysics_Static::Restore( idRestoreGame *savefile ) {
-	savefile->ReadObject( reinterpret_cast<idClass *&>( self ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( self ) );
 
 	savefile->ReadVec3( current.origin );
 	savefile->ReadMat3( current.axis );
@@ -123,7 +123,7 @@ idPhysics_Static::SetClipModel
 void idPhysics_Static::SetClipModel( idClipModel *model, float density, int id, bool freeOld ) {
 	assert( self );
 
-	if ( clipModel && clipModel != model && freeOld ) {
+	if ( clipModel != NULL && clipModel != model && freeOld ) {
 		delete clipModel;
 	}
 	clipModel = model;
@@ -544,8 +544,7 @@ void idPhysics_Static::ClipTranslation( trace_t &results, const idVec3 &translat
 		gameLocal.clip.TranslationModel( results, current.origin, current.origin + translation,
 			clipModel, current.axis, MASK_SOLID, model->Handle(), model->GetOrigin(), model->GetAxis() );
 	} else {
-		gameLocal.clip.Translation( results, current.origin, current.origin + translation,
-			clipModel, current.axis, MASK_SOLID, self );
+		gameLocal.clip.Translation( results, current.origin, current.origin + translation, clipModel, current.axis, MASK_SOLID, self );
 	}
 }
 
@@ -586,7 +585,7 @@ idPhysics_Static::DisableClip
 ================
 */
 void idPhysics_Static::DisableClip( void ) {
-	if ( clipModel ) {
+	if ( clipModel != NULL ) {
 		clipModel->Disable();
 	}
 }
@@ -597,7 +596,7 @@ idPhysics_Static::EnableClip
 ================
 */
 void idPhysics_Static::EnableClip( void ) {
-	if ( clipModel ) {
+	if ( clipModel != NULL ) {
 		clipModel->Enable();
 	}
 }

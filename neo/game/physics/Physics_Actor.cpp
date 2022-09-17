@@ -27,6 +27,7 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 #include "sys/platform.h"
+
 #include "Entity.h"
 
 #include "physics/Physics_Actor.h"
@@ -48,6 +49,10 @@ idPhysics_Actor::idPhysics_Actor( void ) {
 	masterYaw = 0.0f;
 	masterDeltaYaw = 0.0f;
 	groundEntityPtr = NULL;
+
+	// liquid support
+	waterLevel = WATERLEVEL_NONE;
+	waterType = 0;
 }
 
 /*
@@ -56,7 +61,7 @@ idPhysics_Actor::~idPhysics_Actor
 ================
 */
 idPhysics_Actor::~idPhysics_Actor( void ) {
-	if ( clipModel ) {
+	if ( clipModel != NULL ) {
 		delete clipModel;
 		clipModel = NULL;
 	}
@@ -68,7 +73,6 @@ idPhysics_Actor::Save
 ================
 */
 void idPhysics_Actor::Save( idSaveGame *savefile ) const {
-
 	savefile->WriteClipModel( clipModel );
 	savefile->WriteMat3( clipModelAxis );
 
@@ -79,6 +83,11 @@ void idPhysics_Actor::Save( idSaveGame *savefile ) const {
 	savefile->WriteFloat( masterYaw );
 	savefile->WriteFloat( masterDeltaYaw );
 
+	// liquid support --->
+	savefile->WriteInt( ( int )waterLevel );
+	savefile->WriteInt( waterType );
+	// <---
+
 	groundEntityPtr.Save( savefile );
 }
 
@@ -88,16 +97,20 @@ idPhysics_Actor::Restore
 ================
 */
 void idPhysics_Actor::Restore( idRestoreGame *savefile ) {
-
 	savefile->ReadClipModel( clipModel );
 	savefile->ReadMat3( clipModelAxis );
 
 	savefile->ReadFloat( mass );
 	savefile->ReadFloat( invMass );
 
-	savefile->ReadObject( reinterpret_cast<idClass *&>( masterEntity ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( masterEntity ) );
 	savefile->ReadFloat( masterYaw );
 	savefile->ReadFloat( masterDeltaYaw );
+
+	// liquid support --->
+	savefile->ReadInt( ( int& )waterLevel );
+	savefile->ReadInt( waterType );
+	// <---
 
 	groundEntityPtr.Restore( savefile );
 }
@@ -111,14 +124,13 @@ void idPhysics_Actor::SetClipModelAxis( void ) {
 	// align clip model to gravity direction
 	if ( ( gravityNormal[2] == -1.0f ) || ( gravityNormal == vec3_zero ) ) {
 		clipModelAxis.Identity();
-	}
-	else {
+	} else {
 		clipModelAxis[2] = -gravityNormal;
 		clipModelAxis[2].NormalVectors( clipModelAxis[0], clipModelAxis[1] );
 		clipModelAxis[1] = -clipModelAxis[1];
 	}
 
-	if ( clipModel ) {
+	if ( clipModel != NULL ) {
 		clipModel->Link( gameLocal.clip, self, 0, clipModel->GetOrigin(), clipModelAxis );
 	}
 }
@@ -161,7 +173,7 @@ void idPhysics_Actor::SetClipModel( idClipModel *model, const float density, int
 	assert( model->IsTraceModel() );	// and it should be a trace model
 	assert( density > 0.0f );			// density should be valid
 
-	if ( clipModel && clipModel != model && freeOld ) {
+	if ( clipModel != NULL && clipModel != model && freeOld ) {
 		delete clipModel;
 	}
 	clipModel = model;
@@ -208,7 +220,7 @@ float idPhysics_Actor::GetMass( int id ) const {
 
 /*
 ================
-idPhysics_Actor::SetClipMask
+idPhysics_Actor::SetContents
 ================
 */
 void idPhysics_Actor::SetContents( int contents, int id ) {
@@ -217,7 +229,7 @@ void idPhysics_Actor::SetContents( int contents, int id ) {
 
 /*
 ================
-idPhysics_Actor::SetClipMask
+idPhysics_Actor::GetContents
 ================
 */
 int idPhysics_Actor::GetContents( int id ) const {
@@ -291,8 +303,7 @@ void idPhysics_Actor::ClipTranslation( trace_t &results, const idVec3 &translati
 		gameLocal.clip.TranslationModel( results, clipModel->GetOrigin(), clipModel->GetOrigin() + translation,
 								clipModel, clipModel->GetAxis(), clipMask,
 								model->Handle(), model->GetOrigin(), model->GetAxis() );
-	}
-	else {
+	} else {
 		gameLocal.clip.Translation( results, clipModel->GetOrigin(), clipModel->GetOrigin() + translation,
 								clipModel, clipModel->GetAxis(), clipMask, self );
 	}
@@ -308,8 +319,7 @@ void idPhysics_Actor::ClipRotation( trace_t &results, const idRotation &rotation
 		gameLocal.clip.RotationModel( results, clipModel->GetOrigin(), rotation,
 								clipModel, clipModel->GetAxis(), clipMask,
 								model->Handle(), model->GetOrigin(), model->GetAxis() );
-	}
-	else {
+	} else {
 		gameLocal.clip.Rotation( results, clipModel->GetOrigin(), rotation,
 								clipModel, clipModel->GetAxis(), clipMask, self );
 	}
@@ -323,9 +333,8 @@ idPhysics_Actor::ClipContents
 int idPhysics_Actor::ClipContents( const idClipModel *model ) const {
 	if ( model ) {
 		return gameLocal.clip.ContentsModel( clipModel->GetOrigin(), clipModel, clipModel->GetAxis(), -1,
-									model->Handle(), model->GetOrigin(), model->GetAxis() );
-	}
-	else {
+								model->Handle(), model->GetOrigin(), model->GetAxis() );
+	} else {
 		return gameLocal.clip.Contents( clipModel->GetOrigin(), clipModel, clipModel->GetAxis(), -1, NULL );
 	}
 }
@@ -372,7 +381,6 @@ idPhysics_Actor::EvaluateContacts
 ================
 */
 bool idPhysics_Actor::EvaluateContacts( void ) {
-
 	// get all the ground contacts
 	ClearContacts();
 	AddGroundContacts( clipModel );
@@ -380,3 +388,73 @@ bool idPhysics_Actor::EvaluateContacts( void ) {
 
 	return ( contacts.Num() != 0 );
 }
+
+// liquid support --->
+/*
+=============
+idPhysics_Actor::SetWaterLevel
+=============
+*/
+void idPhysics_Actor::SetWaterLevel( void ) {
+	idVec3		point;
+	idVec3		origin;
+	idBounds	bounds;
+	int			contents;
+
+	//
+	// get waterlevel, accounting for ducking
+	//
+	waterLevel	= WATERLEVEL_NONE;
+	waterType	= 0;
+
+	origin = this->GetOrigin();
+	bounds = clipModel->GetBounds();
+
+	// check at feet level
+	point = origin - ( bounds[0][2] + 1.0f ) * gravityNormal;
+	contents = gameLocal.clip.Contents( point, NULL, mat3_identity, -1, self );
+	if ( contents & MASK_WATER ) {
+
+		// sets water entity
+		this->SetWaterLevelf();
+
+		waterType = contents;
+		waterLevel = WATERLEVEL_FEET;
+
+		// check at waist level
+		point = origin - ( bounds[1][2] - bounds[0][2] ) * 0.5f * gravityNormal;
+		contents = gameLocal.clip.Contents( point, NULL, mat3_identity, -1, self );
+		if ( contents & MASK_WATER ) {
+
+			waterLevel = WATERLEVEL_WAIST;
+
+			// check at head level
+			point = origin - ( bounds[1][2] - 1.0f ) * gravityNormal;
+			contents = gameLocal.clip.Contents( point, NULL, mat3_identity, -1, self );
+			if ( contents & MASK_WATER ) {
+				waterLevel = WATERLEVEL_HEAD;
+			}
+		}
+	} else {
+		this->SetWater( NULL );
+	}
+}
+
+/*
+================
+idPhysics_Actor::GetWaterLevel
+================
+*/
+waterLevel_t idPhysics_Actor::GetWaterLevel( void ) const {
+	return waterLevel;
+}
+
+/*
+================
+idPhysics_Actor::GetWaterType
+================
+*/
+int idPhysics_Actor::GetWaterType( void ) const {
+	return waterType;
+}
+// <---

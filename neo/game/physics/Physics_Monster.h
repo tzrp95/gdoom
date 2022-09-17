@@ -34,14 +34,14 @@ If you have questions concerning this license or the applicable additional terms
 #include "physics/Physics_Actor.h"
 
 /*
-===================================================================================
+===========================================================================
 
 	Monster physics
 
-	Simulates the motion of a monster through the environment. The monster motion
-	is typically driven by animations.
+	Simulates the motion of a monster through the environment. 
+	The monster motion is typically driven by animations.
 
-===================================================================================
+===========================================================================
 */
 
 typedef enum {
@@ -89,7 +89,7 @@ public:
 							// don't use delta movement
 	void					UseVelocityMove( bool force );
 							// get entity blocking the move
-	idEntity *				GetSlideMoveEntity( void ) const;
+	idEntity				*GetSlideMoveEntity( void ) const;
 							// enable/disable activation by impact
 	void					EnableImpact( void );
 	void					DisableImpact( void );
@@ -117,10 +117,10 @@ public:	// common physics interface
 
 	void					SetLinearVelocity( const idVec3 &newLinearVelocity, int id = 0 );
 
-	const idVec3 &			GetLinearVelocity( int id = 0 ) const;
+	const idVec3			&GetLinearVelocity( int id = 0 ) const;
 
 	void					SetPushed( int deltaTime );
-	const idVec3 &			GetPushedLinearVelocity( const int id = 0 ) const;
+	const idVec3			&GetPushedLinearVelocity( const int id = 0 ) const;
 
 	void					SetMaster( idEntity *master, const bool orientated = true );
 
@@ -144,7 +144,7 @@ private:
 
 	// results of last evaluate
 	monsterMoveResult_t		moveResult;
-	idEntity *				blockingEntity;
+	idEntity				*blockingEntity;
 
 private:
 	void					CheckGround( monsterPState_t &state );

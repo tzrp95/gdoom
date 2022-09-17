@@ -34,27 +34,23 @@ If you have questions concerning this license or the applicable additional terms
 
 class idSaveGame;
 class idRestoreGame;
-
-/*
-===============================================================================
-
-  Handles collision detection with the world and between physics objects.
-
-===============================================================================
-*/
-
-#define CLIPMODEL_ID_TO_JOINT_HANDLE( id )	( ( id ) >= 0 ? INVALID_JOINT : ((jointHandle_t) ( -1 - id )) )
-#define JOINT_HANDLE_TO_CLIPMODEL_ID( id )	( -1 - id )
-
 class idClip;
+class idClipModel;
 class idEntity;
 
+/*
+===============================================================
 
-//===============================================================
-//
-//	idClipModel
-//
-//===============================================================
+	idClipModel
+
+	Handles collision detection with the world and
+	between physics objects.
+
+===============================================================
+*/
+
+#define CLIPMODEL_ID_TO_JOINT_HANDLE( id )	( ( id ) >= 0 ? INVALID_JOINT : ( ( jointHandle_t ) ( -1 - id ) ) )
+#define JOINT_HANDLE_TO_CLIPMODEL_ID( id )	( -1 - id )
 
 class idClipModel {
 
@@ -84,26 +80,26 @@ public:
 	void					Enable( void );						// enable for clipping
 	void					Disable( void );					// keep linked but disable for clipping
 	void					SetMaterial( const idMaterial *m );
-	const idMaterial *		GetMaterial( void ) const;
+	const idMaterial		*GetMaterial( void ) const;
 	void					SetContents( int newContents );		// override contents
 	int						GetContents( void ) const;
 	void					SetEntity( idEntity *newEntity );
-	idEntity *				GetEntity( void ) const;
+	idEntity				*GetEntity( void ) const;
 	void					SetId( int newId );
 	int						GetId( void ) const;
 	void					SetOwner( idEntity *newOwner );
-	idEntity *				GetOwner( void ) const;
-	const idBounds &		GetBounds( void ) const;
-	const idBounds &		GetAbsBounds( void ) const;
-	const idVec3 &			GetOrigin( void ) const;
-	const idMat3 &			GetAxis( void ) const;
+	idEntity				*GetOwner( void ) const;
+	const idBounds			&GetBounds( void ) const;
+	const idBounds			&GetAbsBounds( void ) const;
+	const idVec3			&GetOrigin( void ) const;
+	const idMat3			&GetAxis( void ) const;
 	bool					IsTraceModel( void ) const;			// returns true if this is a trace model
 	bool					IsRenderModel( void ) const;		// returns true if this is a render model
 	bool					IsLinked( void ) const;				// returns true if the clip model is linked
 	bool					IsEnabled( void ) const;			// returns true if enabled for collision detection
 	bool					IsEqual( const idTraceModel &trm ) const;
 	cmHandle_t				Handle( void ) const;				// returns handle used to collide vs this model
-	const idTraceModel *	GetTraceModel( void ) const;
+	const idTraceModel		*GetTraceModel( void ) const;
 	void					GetMassProperties( const float density, float &mass, idVec3 &centerOfMass, idMat3 &inertiaTensor ) const;
 
 	static cmHandle_t		CheckModel( const char *name );
@@ -115,20 +111,20 @@ public:
 
 private:
 	bool					enabled;				// true if this clip model is used for clipping
-	idEntity *				entity;					// entity using this clip model
+	idEntity				*entity;				// entity using this clip model
 	int						id;						// id for entities that use multiple clip models
-	idEntity *				owner;					// owner of the entity that owns this clip model
+	idEntity				*owner;					// owner of the entity that owns this clip model
 	idVec3					origin;					// origin of clip model
 	idMat3					axis;					// orientation of clip model
 	idBounds				bounds;					// bounds
 	idBounds				absBounds;				// absolute bounds
-	const idMaterial *		material;				// material for trace models
+	const idMaterial		*material;				// material for trace models
 	int						contents;				// all contents ored together
 	cmHandle_t				collisionModelHandle;	// handle to collision model
 	int						traceModelIndex;		// trace model used for collision detection
 	int						renderModelHandle;		// render model def handle
 
-	struct clipLink_s *		clipLinks;				// links into sectors
+	struct clipLink_s		*clipLinks;				// links into sectors
 	int						touchCount;
 
 	void					Init( void );			// initialize
@@ -136,7 +132,7 @@ private:
 
 	static int				AllocTraceModel( const idTraceModel &trm );
 	static void				FreeTraceModel( int traceModelIndex );
-	static idTraceModel *	GetCachedTraceModel( int traceModelIndex );
+	static idTraceModel		*GetCachedTraceModel( int traceModelIndex );
 	static int				GetTraceModelHashKey( const idTraceModel &trm );
 };
 
@@ -164,7 +160,7 @@ ID_INLINE void idClipModel::SetMaterial( const idMaterial *m ) {
 	material = m;
 }
 
-ID_INLINE const idMaterial * idClipModel::GetMaterial( void ) const {
+ID_INLINE const idMaterial *idClipModel::GetMaterial( void ) const {
 	return material;
 }
 
@@ -243,12 +239,13 @@ ID_INLINE const idTraceModel *idClipModel::GetTraceModel( void ) const {
 	return idClipModel::GetCachedTraceModel( traceModelIndex );
 }
 
+/*
+===============================================================
 
-//===============================================================
-//
-//	idClip
-//
-//===============================================================
+	idClip
+
+===============================================================
+*/
 
 class idClip {
 
@@ -303,8 +300,8 @@ public:
 	int						EntitiesTouchingBounds( const idBounds &bounds, int contentMask, idEntity **entityList, int maxCount ) const;
 	int						ClipModelsTouchingBounds( const idBounds &bounds, int contentMask, idClipModel **clipModelList, int maxCount ) const;
 
-	const idBounds &		GetWorldBounds( void ) const;
-	idClipModel *			DefaultClipModel( void );
+	const idBounds			&GetWorldBounds( void ) const;
+	idClipModel				*DefaultClipModel( void );
 
 							// stats and debug drawing
 	void					PrintStatistics( void );
@@ -313,11 +310,12 @@ public:
 
 private:
 	int						numClipSectors;
-	struct clipSector_s *	clipSectors;
+	struct clipSector_s		*clipSectors;
 	idBounds				worldBounds;
 	idClipModel				temporaryClipModel;
 	idClipModel				defaultClipModel;
 	mutable int				touchCount;
+
 							// statistics
 	int						numTranslations;
 	int						numRotations;
@@ -327,9 +325,9 @@ private:
 	int						numContacts;
 
 private:
-	struct clipSector_s *	CreateClipSectors_r( const int depth, const idBounds &bounds, idVec3 &maxSector );
+	struct clipSector_s		*CreateClipSectors_r( const int depth, const idBounds &bounds, idVec3 &maxSector );
 	void					ClipModelsTouchingBounds_r( const struct clipSector_s *node, struct listParms_s &parms ) const;
-	const idTraceModel *	TraceModelForClipModel( const idClipModel *mdl ) const;
+	const idTraceModel		*TraceModelForClipModel( const idClipModel *mdl ) const;
 	int						GetTraceClipModels( const idBounds &bounds, int contentMask, const idEntity *passEntity, idClipModel **clipModelList ) const;
 	void					TraceRenderModel( trace_t &trace, const idVec3 &start, const idVec3 &end, const float radius, const idMat3 &axis, idClipModel *touch ) const;
 };
@@ -346,7 +344,7 @@ ID_INLINE bool idClip::TraceBounds( trace_t &results, const idVec3 &start, const
 	return ( results.fraction < 1.0f );
 }
 
-ID_INLINE const idBounds & idClip::GetWorldBounds( void ) const {
+ID_INLINE const idBounds &idClip::GetWorldBounds( void ) const {
 	return worldBounds;
 }
 

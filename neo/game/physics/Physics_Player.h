@@ -51,13 +51,6 @@ typedef enum {
 	PM_NOCLIP				// flying without collision detection nor gravity
 } pmtype_t;
 
-typedef enum {
-	WATERLEVEL_NONE,
-	WATERLEVEL_FEET,
-	WATERLEVEL_WAIST,
-	WATERLEVEL_HEAD
-} waterLevel_t;
-
 #define	MAXTOUCH					32
 
 typedef struct playerPState_s {
@@ -69,6 +62,17 @@ typedef struct playerPState_s {
 	int						movementType;
 	int						movementFlags;
 	int						movementTime;
+
+	playerPState_s() :
+		origin( vec3_zero ),
+		velocity( vec3_zero ),
+		localOrigin( vec3_zero ),
+		pushVelocity( vec3_zero ),
+		stepUp( 0.0f ),
+		movementType( 0 ),
+		movementFlags( 0 ),
+		movementTime( 0 ) {
+	}
 } playerPState_t;
 
 class idPhysics_Player : public idPhysics_Actor {
@@ -91,14 +95,17 @@ public:
 	void					SetKnockBack( const int knockBackTime );
 	void					SetDebugLevel( bool set );
 							// feed back from last physics frame
-	waterLevel_t			GetWaterLevel( void ) const;
-	int						GetWaterType( void ) const;
 	bool					HasJumped( void ) const;
 	bool					HasSteppedUp( void ) const;
 	float					GetStepUp( void ) const;
 	bool					IsCrouching( void ) const;
 	bool					OnLadder( void ) const;
-	const idVec3 &			PlayerGetOrigin( void ) const;	// != GetOrigin
+	const idVec3			&PlayerGetOrigin( void ) const;	// != GetOrigin
+
+	// dashing
+	float					GetPreDashSpeed( void ) const;
+    bool					IsDashing( void ) const;
+	void					StartDash( void );
 
 public:	// common physics interface
 	bool					Evaluate( int timeStepMSec, int endTimeMSec );
@@ -121,10 +128,11 @@ public:	// common physics interface
 
 	void					SetLinearVelocity( const idVec3 &newLinearVelocity, int id = 0 );
 
-	const idVec3 &			GetLinearVelocity( int id = 0 ) const;
+	const idVec3			&GetLinearVelocity( int id = 0 ) const;
 
 	void					SetPushed( int deltaTime );
-	const idVec3 &			GetPushedLinearVelocity( const int id = 0 ) const;
+	void					SetPushedWithAbnormalVelocityHack( int deltaTime );
+	const idVec3			&GetPushedLinearVelocity( const int id = 0 ) const;
 	void					ClearPushedVelocity( void );
 
 	void					SetMaster( idEntity *master, const bool orientated = true );
@@ -159,15 +167,19 @@ private:
 	bool					walking;
 	bool					groundPlane;
 	trace_t					groundTrace;
-	const idMaterial *		groundMaterial;
+	const idMaterial		*groundMaterial;
 
 	// ladder movement
 	bool					ladder;
 	idVec3					ladderNormal;
 
-	// results of last evaluate
-	waterLevel_t			waterLevel;
-	int						waterType;
+	// air jump
+	bool					airJumpDone;
+	int						lastJumpTime;
+
+	// dashing
+	bool					dashing;
+	float					preDashSpeed;
 
 private:
 	float					CmdScale( const usercmd_t &cmd ) const;
@@ -189,9 +201,15 @@ private:
 	void					CheckLadder( void );
 	bool					CheckJump( void );
 	bool					CheckWaterJump( void );
-	void					SetWaterLevel( void );
 	void					DropTimers( void );
 	void					MovePlayer( int msec );
+
+	// air jump
+	bool					CheckAirJumpGroundDistance( void );
+	bool					CheckAirJump( void );
+
+	// dashing
+	void					DashMove( void );
 };
 
 #endif /* !__PHYSICS_PLAYER_H__ */

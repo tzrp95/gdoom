@@ -46,6 +46,10 @@ public:
 
 						idForce_Spring( void );
 	virtual				~idForce_Spring( void );
+
+	void				Save( idSaveGame *savefile ) const;
+	void				Restore( idRestoreGame *savefile );
+
 						// initialize the spring
 	void				InitSpring( float Kstretch, float Kcompress, float damping, float restLength );
 						// set the entities and positions on these entities the spring is attached to
@@ -57,7 +61,6 @@ public: // common force interface
 	virtual void		RemovePhysics( const idPhysics *phys );
 
 private:
-
 	// spring properties
 	float				Kstretch;
 	float				Kcompress;
@@ -65,13 +68,12 @@ private:
 	float				restLength;
 
 	// positioning
-	idPhysics *			physics1;	// first physics object
+	idPhysics			*physics1;	// first physics object
 	int					id1;		// clip model id of first physics object
 	idVec3				p1;			// position on clip model
-	idPhysics *			physics2;	// second physics object
+	idPhysics			*physics2;	// second physics object
 	int					id2;		// clip model id of second physics object
 	idVec3				p2;			// position on clip model
-
 };
 
 #endif /* !__FORCE_SPRING_H__ */

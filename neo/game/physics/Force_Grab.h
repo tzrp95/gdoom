@@ -26,48 +26,55 @@ If you have questions concerning this license or the applicable additional terms
 ===========================================================================
 */
 
-#ifndef __FORCE_CONSTANT_H__
-#define __FORCE_CONSTANT_H__
+#ifndef __FORCE_GRAB_H__
+#define __FORCE_GRAB_H__
 
 #include "physics/Force.h"
 
 /*
 ===============================================================================
 
-	Constant force
+	Drag force
 
 ===============================================================================
 */
 
-class idForce_Constant : public idForce {
+class idForce_Grab : public idForce {
 
 public:
-	CLASS_PROTOTYPE( idForce_Constant );
-
-						idForce_Constant( void );
-	virtual				~idForce_Constant( void );
-
+	CLASS_PROTOTYPE( idForce_Grab );
 
 	void				Save( idSaveGame *savefile ) const;
 	void				Restore( idRestoreGame *savefile );
 
-						// constant force
-	void				SetForce( const idVec3 &force );
-						// set force position
-	void				SetPosition( idPhysics *physics, int id, const idVec3 &point );
+						idForce_Grab( void );
+	virtual				~idForce_Grab( void );
+						// initialize the drag force
+	void				Init( float damping );
+						// set physics object being dragged
+	void				SetPhysics( idPhysics *physics, int id, const idVec3 &goal );
+						// update the goal position
+	void				SetGoalPosition( const idVec3 &goal );
 
-	void				SetPhysics( idPhysics *physics );
 
 public: // common force interface
 	virtual void		Evaluate( int time );
 	virtual void		RemovePhysics( const idPhysics *phys );
 
+	// Get the distance from object to goal position
+	float				GetDistanceToGoal( void );
+
 private:
-	// force properties
-	idVec3				force;
-	idPhysics			*physics;
-	int					id;
-	idVec3				point;
+
+	// properties
+	float				damping;
+	idVec3				goalPosition;
+
+	float				distanceToGoal;
+
+	// positioning
+	idPhysics			*physics;		// physics object
+	int					id;				// clip model id of physics object
 };
 
-#endif /* !__FORCE_CONSTANT_H__ */
+#endif /* !__FORCE_GRAB_H__ */

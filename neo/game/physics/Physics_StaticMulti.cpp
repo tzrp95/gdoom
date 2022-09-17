@@ -112,7 +112,7 @@ idPhysics_StaticMulti::Restore
 void idPhysics_StaticMulti::Restore( idRestoreGame *savefile ) {
 	int i, num;
 
-	savefile->ReadObject( reinterpret_cast<idClass *&>( self ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( self ) );
 
 	savefile->ReadInt(num);
 	current.AssureSize( num );
@@ -152,7 +152,7 @@ void idPhysics_StaticMulti::RemoveIndex( int id, bool freeClipModel ) {
 	if ( id < 0 || id >= clipModels.Num() ) {
 		return;
 	}
-	if ( clipModels[id] && freeClipModel ) {
+	if ( clipModels[id] != NULL && freeClipModel ) {
 		delete clipModels[id];
 		clipModels[id] = NULL;
 	}
@@ -175,7 +175,7 @@ void idPhysics_StaticMulti::SetClipModel( idClipModel *model, float density, int
 		clipModels.AssureSize( id+1, NULL );
 	}
 
-	if ( clipModels[id] && clipModels[id] != model && freeOld ) {
+	if ( clipModels[id] != NULL && clipModels[id] != model && freeOld ) {
 		delete clipModels[id];
 	}
 	clipModels[id] = model;
@@ -188,8 +188,8 @@ void idPhysics_StaticMulti::SetClipModel( idClipModel *model, float density, int
 			break;
 		}
 	}
-	current.SetNum( i+1, false );
-	clipModels.SetNum( i+1, false );
+	current.SetNum( i + 1, false );
+	clipModels.SetNum( i + 1, false );
 }
 
 /*
@@ -748,7 +748,7 @@ int idPhysics_StaticMulti::ClipContents( const idClipModel *model ) const {
 		if ( clipModels[i] ) {
 			if ( model ) {
 				contents |= gameLocal.clip.ContentsModel( clipModels[i]->GetOrigin(), clipModels[i], clipModels[i]->GetAxis(), -1,
-											model->Handle(), model->GetOrigin(), model->GetAxis() );
+														  model->Handle(), model->GetOrigin(), model->GetAxis() );
 			} else {
 				contents |= gameLocal.clip.Contents( clipModels[i]->GetOrigin(), clipModels[i], clipModels[i]->GetAxis(), -1, NULL );
 			}

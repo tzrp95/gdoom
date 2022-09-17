@@ -27,7 +27,9 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 #include "sys/platform.h"
+
 #include "physics/Physics.h"
+#include "gamesys/SaveGame.h"
 
 #include "physics/Force_Spring.h"
 
@@ -122,7 +124,7 @@ void idForce_Spring::Evaluate( int time ) {
 	}
 
 	force = pos2 - pos1;
-	dampingForce = ( damping * ( ((velocity2 - velocity1) * force) / (force * force) ) ) * force;
+	dampingForce = ( damping * ( ( ( velocity2 - velocity1 ) * force ) / ( force * force ) ) ) * force;
 	length = force.Normalize();
 
 	// if the spring is stretched
@@ -136,8 +138,7 @@ void idForce_Spring::Evaluate( int time ) {
 				physics2->AddForce( id2, pos2, -force );
 			}
 		}
-	}
-	else {
+	} else {
 		if ( Kcompress > 0.0f ) {
 			force = ( Square( length - restLength ) * Kcompress ) * force - dampingForce;
 			if ( physics1 ) {
@@ -162,4 +163,28 @@ void idForce_Spring::RemovePhysics( const idPhysics *phys ) {
 	if ( physics2 == phys ) {
 		physics2 = NULL;
 	}
+}
+
+/*
+================
+idForce_Spring::Save
+================
+*/
+void idForce_Spring::Save( idSaveGame *savefile ) const {
+	savefile->WriteFloat ( Kstretch );
+	savefile->WriteFloat ( Kcompress );
+	savefile->WriteFloat ( damping );
+	savefile->WriteFloat ( restLength );
+}
+
+/*
+================
+idForce_Spring::Restore
+================
+*/
+void idForce_Spring::Restore( idRestoreGame *savefile ) {
+	savefile->ReadFloat ( Kstretch );
+	savefile->ReadFloat ( Kcompress );
+	savefile->ReadFloat ( damping );
+	savefile->ReadFloat ( restLength );
 }

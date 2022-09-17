@@ -74,17 +74,17 @@ public:
 					// returns the number of pushed entities
 	int				GetNumPushedEntities( void ) const { return numPushed; }
 					// get the ith pushed entity
-	idEntity *		GetPushedEntity( int i ) const { assert( i >= 0 && i < numPushed ); return pushed[i].ent; }
+	idEntity		*GetPushedEntity( int i ) const { assert( i >= 0 && i < numPushed ); return pushed[i].ent; }
 
 private:
 	struct pushed_s {
-		idEntity *	ent;					// pushed entity
+		idEntity	*ent;					// pushed entity
 		idAngles	deltaViewAngles;		// actor delta view angles
 	}				pushed[MAX_GENTITIES];	// pushed entities
 	int				numPushed;				// number of pushed entities
 
 	struct pushedGroup_s {
-		idEntity *	ent;
+		idEntity	*ent;
 		float		fraction;
 		bool		groundContact;
 		bool		test;

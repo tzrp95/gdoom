@@ -43,7 +43,6 @@ idForce_Drag::idForce_Drag
 */
 idForce_Drag::idForce_Drag( void ) {
 	damping			= 0.5f;
-	dragPosition	= vec3_zero;
 	physics			= NULL;
 	id				= 0;
 	p				= vec3_zero;

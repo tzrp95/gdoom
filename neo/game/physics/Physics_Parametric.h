@@ -39,10 +39,10 @@ If you have questions concerning this license or the applicable additional terms
 
 	Parametric physics
 
-	Used for predefined or scripted motion. The motion of an object is completely
-	parametrized. By adjusting the parameters an object is forced to follow a
-	predefined path. The parametric physics is typically used for doors, bridges,
-	rotating fans etc.
+	Used for predefined or scripted motion. The motion of an object is
+	completely parametrized. By adjusting the parameters an object is
+	forced to follow a predefined path. The parametric physics is typically
+	used for doors, bridges, rotating fans etc.
 
 ===================================================================================
 */
@@ -59,7 +59,7 @@ typedef struct parametricPState_s {
 	idExtrapolate<idAngles>					angularExtrapolation;	// extrapolation based description of the orientation over time
 	idInterpolateAccelDecelLinear<idVec3>	linearInterpolation;	// interpolation based description of the position over time
 	idInterpolateAccelDecelLinear<idAngles>	angularInterpolation;	// interpolation based description of the orientation over time
-	idCurve_Spline<idVec3> *				spline;					// spline based description of the position over time
+	idCurve_Spline<idVec3>					*spline;				// spline based description of the position over time
 	idInterpolateAccelDecelLinear<float>	splineInterpolate;		// position along the spline over time
 	bool									useSplineAngles;		// set the orientation using the spline
 } parametricPState_t;
@@ -99,7 +99,7 @@ public:
 
 public:	// common physics interface
 	void					SetClipModel( idClipModel *model, float density, int id = 0, bool freeOld = true );
-	idClipModel *			GetClipModel( int id = 0 ) const;
+	idClipModel				*GetClipModel( int id = 0 ) const;
 	int						GetNumClipModels( void ) const;
 
 	void					SetMass( float mass, int id = -1 );
@@ -108,8 +108,8 @@ public:	// common physics interface
 	void					SetContents( int contents, int id = -1 );
 	int						GetContents( int id = -1 ) const;
 
-	const idBounds &		GetBounds( int id = -1 ) const;
-	const idBounds &		GetAbsBounds( int id = -1 ) const;
+	const idBounds			&GetBounds( int id = -1 ) const;
+	const idBounds			&GetAbsBounds( int id = -1 ) const;
 
 	bool					Evaluate( int timeStepMSec, int endTimeMSec );
 	void					UpdateTime( int endTimeMSec );
@@ -129,14 +129,14 @@ public:	// common physics interface
 	void					Translate( const idVec3 &translation, int id = -1 );
 	void					Rotate( const idRotation &rotation, int id = -1 );
 
-	const idVec3 &			GetOrigin( int id = 0 ) const;
-	const idMat3 &			GetAxis( int id = 0 ) const;
+	const idVec3			&GetOrigin( int id = 0 ) const;
+	const idMat3			&GetAxis( int id = 0 ) const;
 
 	void					SetLinearVelocity( const idVec3 &newLinearVelocity, int id = 0 );
 	void					SetAngularVelocity( const idVec3 &newAngularVelocity, int id = 0 );
 
-	const idVec3 &			GetLinearVelocity( int id = 0 ) const;
-	const idVec3 &			GetAngularVelocity( int id = 0 ) const;
+	const idVec3			&GetLinearVelocity( int id = 0 ) const;
+	const idVec3			&GetAngularVelocity( int id = 0 ) const;
 
 	void					DisableClip( void );
 	void					EnableClip( void );
@@ -146,8 +146,8 @@ public:	// common physics interface
 
 	void					SetMaster( idEntity *master, const bool orientated = true );
 
-	const trace_t *			GetBlockingInfo( void ) const;
-	idEntity *				GetBlockingEntity( void ) const;
+	const trace_t			*GetBlockingInfo( void ) const;
+	idEntity				*GetBlockingEntity( void ) const;
 
 	int						GetLinearEndTime( void ) const;
 	int						GetAngularEndTime( void ) const;
@@ -162,7 +162,7 @@ private:
 
 	// pusher
 	bool					isPusher;
-	idClipModel *			clipModel;
+	idClipModel				*clipModel;
 	int						pushFlags;
 
 	// results of last evaluate

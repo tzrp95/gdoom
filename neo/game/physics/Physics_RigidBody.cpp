@@ -32,56 +32,182 @@ If you have questions concerning this license or the applicable additional terms
 #include "gamesys/SysCvar.h"
 #include "Entity.h"
 #include "Player.h"
+#include "physics/Physics_Liquid.h"
 
 #include "physics/Physics_RigidBody.h"
 
 CLASS_DECLARATION( idPhysics_Base, idPhysics_RigidBody )
 END_CLASS
 
-const float STOP_SPEED		= 10.0f;
-
+const int STOP_SPEED		= 10.0f;
 
 #undef RB_TIMINGS
 
 #ifdef RB_TIMINGS
-static int lastTimerReset = 0;
-static int numRigidBodies = 0;
+static int lastTimerReset	= 0;
+static int numRigidBodies	= 0;
 static idTimer timer_total, timer_collision;
 #endif
 
+// liquid support --->
+// if linearVelocity < WATER_STOP_LINEAR && angularVelocity < WATER_STOP_ANGULAR then set the RB to rest
+// and we need this->noMoveTime + NO_MOVE_TIME < gameLocal.getTime()
+const idVec3 WATER_STOP_LINEAR( 10.0f,10.0f,10.0f );
+const idVec3 WATER_STOP_ANGULAR( 500000.0f, 500000.0f, 500000.0f );
+const int NO_MOVE_TIME		= 200;
+// <---
 
 /*
 ================
 RigidBodyDerivatives
+
+ * modified for liquid support
 ================
 */
 void RigidBodyDerivatives( const float t, const void *clientData, const float *state, float *derivatives ) {
-	const idPhysics_RigidBody *p = (idPhysics_RigidBody *) clientData;
-	rigidBodyIState_t *s = (rigidBodyIState_t *) state;
+	const idPhysics_RigidBody *p = ( idPhysics_RigidBody* ) clientData;
+	rigidBodyIState_t *s = ( rigidBodyIState_t* ) state;
 	// NOTE: this struct should be build conform rigidBodyIState_t
 	struct rigidBodyDerivatives_s {
 		idVec3				linearVelocity;
 		idMat3				angularMatrix;
 		idVec3				force;
 		idVec3				torque;
-	} *d = (struct rigidBodyDerivatives_s *) derivatives;
+	} *d = ( struct rigidBodyDerivatives_s* ) derivatives;
 	idVec3 angularVelocity;
 	idMat3 inverseWorldInertiaTensor;
 
 	inverseWorldInertiaTensor = s->orientation * p->inverseInertiaTensor * s->orientation.Transpose();
 	angularVelocity = inverseWorldInertiaTensor * s->angularMomentum;
+
 	// derivatives
 	d->linearVelocity = p->inverseMass * s->linearMomentum;
 	d->angularMatrix = SkewSymmetric( angularVelocity ) * s->orientation;
-	d->force = - p->linearFriction * s->linearMomentum + p->current.externalForce;
-	d->torque = - p->angularFriction * s->angularMomentum + p->current.externalTorque;
+
+	// underwater we have a higher friction
+	if ( p->GetWaterLevelf() == 0.0f  ) {
+		d->force = - p->linearFriction * s->linearMomentum + p->current.externalForce;
+		d->torque = - p->angularFriction * s->angularMomentum + p->current.externalTorque;
+	} else {		
+		// don't let water friction go less than 25% of the water viscosity
+		float percent = Max( 0.25f,p->GetSubmergedPercent( s->position,s->orientation.Transpose() ) );
+		d->force = ( -p->linearFriction * p->water->GetViscosity() * percent ) * s->linearMomentum + p->current.externalForce;
+		d->torque = ( -p->angularFriction * p->water->GetViscosity() ) * s->angularMomentum + p->current.externalTorque;
+	}
 }
+
+// liquid support --->
+/*
+================
+idPhysics_RigidBody::GetSubmergedPercent
+	
+Approximates the percentage of the body that is submerged
+================
+*/
+float idPhysics_RigidBody::GetSubmergedPercent( const idVec3 &pos, const idMat3 &rotation ) const {
+	idVec3 depth, bottom( pos );
+	idBounds bounds = this->GetBounds();
+	float height, d;
+
+	if ( this->water == NULL ) {
+		return 0.0f;
+	}
+
+	// offset and rotate the bounding box
+	bounds += -centerOfMass;
+	bounds *= rotation;
+
+	// gets the position of the object relative to the surface of the water
+	height = abs( bounds[1] * gravityNormal * 2 );
+
+	// calculates the depth of the bottom of the object
+	bottom += ( height * 0.5f ) * gravityNormal;
+	depth = this->water->GetDepth( bottom );
+	d = abs( depth * gravityNormal );
+
+	if ( d > height ) {
+		// the body is totally submerged
+		return 1.0f;
+	}
+	else if ( d <= 0 ) {
+		return 0.0f;
+	} else {
+		// the body is partly submerged
+		return d / height;
+	}
+}
+
+/*
+================
+idPhysics_RigidBody::GetBuoyancy
+
+Gets buoyancy information for this RB
+
+ *	pos - position of the RB
+ *	rotation - axis for the RB
+ *	bCenter - after the function is called this is an approximation for the center of buoyancy
+ *	percent - rough percentage of the body that is under water
+				used to calculate the volume of the submersed object (volume * percent) to give 
+				the body somewhat realistic bobbing.
+
+Return true if the body is in water, false otherwise
+================
+*/
+bool idPhysics_RigidBody::GetBuoyancy( const idVec3 &pos, const idMat3 &rotation, idVec3 &bCenter, float &percent ) const {
+	idVec3 tbCenter( pos );
+	idBounds bounds = this->GetBounds();
+	idTraceModel tm = *this->GetClipModel()->GetTraceModel();
+	int i, count;
+
+	percent = this->GetSubmergedPercent( pos, rotation );
+	bCenter = pos;
+	
+	if ( percent == 1.0f ) {
+		// the body is totally submerged
+		return true;
+	} else {
+		// the body is partly submerged (or not in the water)
+		//
+		// We do a rough approximation for center of buoyancy.
+		// Normally this is done by calculating the volume of the submersed part of the body
+		// so the center of buoyancy is the center of mass of the submersed volume.  This is
+		// probably a slow computation so what I do is take an average of the submersed
+		// vertices of the trace model.
+		//
+		// I was suprized when this first worked but you can use rb_showBuoyancy to see
+		// what the approximation looks like.
+
+		// set up clip model for approximation of center of buoyancy
+		tm.Translate( -centerOfMass );
+		tm.Rotate( rotation );
+		tm.Translate( pos );
+
+		// calculate which vertices are under water
+		for ( i = 0, count = 1; i < tm.numVerts; i++ ) {
+			if ( gameLocal.clip.Contents( tm.verts[i], NULL, this->GetAxis(), MASK_WATER, NULL) ) {
+				tbCenter += tm.verts[i];
+				count += 1;
+			}
+		}
+
+		if ( count == 1 ) {
+			bCenter = pos;
+		} else {
+			bCenter = tbCenter / count;
+		}
+
+		return ( count != 1 );
+	}
+}
+// <---
 
 /*
 ================
 idPhysics_RigidBody::Integrate
 
-  Calculate next state from the current state using an integrator.
+Calculate next state from the current state using an integrator.
+
+ * modified for liquid support
 ================
 */
 void idPhysics_RigidBody::Integrate( float deltaTime, rigidBodyPState_t &next ) {
@@ -92,11 +218,42 @@ void idPhysics_RigidBody::Integrate( float deltaTime, rigidBodyPState_t &next ) 
 
 	current.i.orientation.TransposeSelf();
 
-	integrator->Evaluate( (float *) &current.i, (float *) &next.i, 0, deltaTime );
+	integrator->Evaluate( ( float* ) &current.i, ( float* ) &next.i, 0, deltaTime );
 	next.i.orientation.OrthoNormalizeSelf();
 
-	// apply gravity
-	next.i.linearMomentum += deltaTime * gravityVector * mass;
+	// apply water gravity if the body is out of water
+	if ( this->SetWaterLevelf() != 0.0f ) {	
+		idVec3 bCenter;
+		idVec3 bForce( gravityVector ), rForce( -gravityVector );
+		float bMass,fraction,liquidMass;
+		bool inWater;
+
+		inWater = this->GetBuoyancy( next.i.position, next.i.orientation.Transpose(), bCenter, fraction );
+
+		// calculate water mass
+		liquidMass = this->volume * this->water->GetDensity() * fraction;
+		// don't let liquid mass get too high
+		liquidMass = Min( liquidMass, 3 * this->mass );
+
+		bMass = this->mass - liquidMass;
+
+		// calculate buoyancy force
+		bForce *= deltaTime * bMass;
+		rForce *= deltaTime * liquidMass;
+
+		// apply water force
+		// basically here we do a ::ApplyImpulse() but we apply it to next, not current
+		next.i.linearMomentum += bForce;
+		next.i.angularMomentum += ( bCenter - next.i.position ).Cross( rForce );
+
+		// take the body out of water if it's not in water.
+		if ( !inWater ) {
+			this->SetWater( NULL );
+		}
+	} else {
+		// apply normal gravity
+		next.i.linearMomentum += deltaTime * gravityVector * mass;
+	}
 
 	current.i.orientation.TransposeSelf();
 	next.i.orientation.TransposeSelf();
@@ -111,8 +268,8 @@ void idPhysics_RigidBody::Integrate( float deltaTime, rigidBodyPState_t &next ) 
 ================
 idPhysics_RigidBody::CollisionImpulse
 
-  Calculates the collision impulse using the velocity relative to the collision object.
-  The current state should be set to the moment of impact.
+Calculates the collision impulse using the velocity relative to the collision object.
+The current state should be set to the moment of impact.
 ================
 */
 bool idPhysics_RigidBody::CollisionImpulse( const trace_t &collision, idVec3 &impulse ) {
@@ -124,6 +281,11 @@ bool idPhysics_RigidBody::CollisionImpulse( const trace_t &collision, idVec3 &im
 
 	// get info from other entity involved
 	ent = gameLocal.entities[collision.c.entityNum];
+
+	if ( ent == NULL ) {
+		return false;
+	}
+
 	ent->GetImpactInfo( self, collision.c.id, collision.c.point, &info );
 
 	// collision point relative to the body center of mass
@@ -132,28 +294,27 @@ bool idPhysics_RigidBody::CollisionImpulse( const trace_t &collision, idVec3 &im
 	linearVelocity = inverseMass * current.i.linearMomentum;
 	inverseWorldInertiaTensor = current.i.orientation.Transpose() * inverseInertiaTensor * current.i.orientation;
 	angularVelocity = inverseWorldInertiaTensor * current.i.angularMomentum;
-	velocity = linearVelocity + angularVelocity.Cross(r);
+	velocity = linearVelocity + angularVelocity.Cross( r );
 	// subtract velocity of other entity
 	velocity -= info.velocity;
 
 	// velocity in normal direction
 	vel = velocity * collision.c.normal;
-
 	if ( vel > -STOP_SPEED ) {
 		impulseNumerator = STOP_SPEED;
-	}
-	else {
+	} else {
 		impulseNumerator = -( 1.0f + bouncyness ) * vel;
 	}
+
 	impulseDenominator = inverseMass + ( ( inverseWorldInertiaTensor * r.Cross( collision.c.normal ) ).Cross( r ) * collision.c.normal );
 	if ( info.invMass ) {
 		impulseDenominator += info.invMass + ( ( info.invInertiaTensor * info.position.Cross( collision.c.normal ) ).Cross( info.position ) * collision.c.normal );
 	}
-	impulse = (impulseNumerator / impulseDenominator) * collision.c.normal;
+	impulse = ( impulseNumerator / impulseDenominator ) * collision.c.normal;
 
 	// update linear and angular momentum with impulse
 	current.i.linearMomentum += impulse;
-	current.i.angularMomentum += r.Cross(impulse);
+	current.i.angularMomentum += r.Cross( impulse );
 
 	// if no movement at all don't blow up
 	if ( collision.fraction < 0.0001f ) {
@@ -169,14 +330,18 @@ bool idPhysics_RigidBody::CollisionImpulse( const trace_t &collision, idVec3 &im
 ================
 idPhysics_RigidBody::CheckForCollisions
 
-  Check for collisions between the current and next state.
-  If there is a collision the next state is set to the state at the moment of impact.
+Check for collisions between the current and next state.
+If there is a collision the next state is set to the state at the moment of impact.
+
+ * modified for liquid support
 ================
 */
 bool idPhysics_RigidBody::CheckForCollisions( const float deltaTime, rigidBodyPState_t &next, trace_t &collision ) {
 //#define TEST_COLLISION_DETECTION
 	idMat3 axis;
 	idRotation rotation;
+	idVec3 pos;
+	trace_t	waterCollision;
 	bool collided = false;
 
 #ifdef TEST_COLLISION_DETECTION
@@ -189,15 +354,52 @@ bool idPhysics_RigidBody::CheckForCollisions( const float deltaTime, rigidBodyPS
 	TransposeMultiply( current.i.orientation, next.i.orientation, axis );
 	rotation = axis.ToRotation();
 	rotation.SetOrigin( current.i.position );
+	pos = next.i.position;
 
 	// if there was a collision
-	if ( gameLocal.clip.Motion( collision, current.i.position, next.i.position, rotation, clipModel, current.i.orientation, clipMask, self ) ) {
+	if ( collided || gameLocal.clip.Motion( collision, current.i.position, next.i.position, rotation, clipModel, current.i.orientation, clipMask, self ) ) {
 		// set the next state to the state at the moment of impact
 		next.i.position = collision.endpos;
 		next.i.orientation = collision.endAxis;
 		next.i.linearMomentum = current.i.linearMomentum;
 		next.i.angularMomentum = current.i.angularMomentum;
 		collided = true;
+	}
+
+	// Check for water collision
+	// ideally we could do this check in one step but if a body moves quickly in shallow water
+	// they will occasionally clip through a solid entity (ie. fall through the floor)
+	if ( gameLocal.clip.Motion( waterCollision, current.i.position, pos, rotation, clipModel, current.i.orientation, MASK_WATER, self ) ) {
+		idEntity *ent = gameLocal.entities[waterCollision.c.entityNum];
+
+		// make sure the object didn't collide with something before hitting the water (we don't splash for that case)
+		if ( !collided || waterCollision.fraction < collision.fraction ) {
+
+			// if the object collides with something with a physics_liquid
+			if ( ent->GetPhysics()->IsType( idPhysics_Liquid::Type ) ) {
+				idPhysics_Liquid *liquid = static_cast<idPhysics_Liquid*>( ent->GetPhysics() );
+				impactInfo_t info;
+
+				self->GetImpactInfo( ent, waterCollision.c.id, waterCollision.c.point, &info );
+
+				// apply water splash friction
+				if ( this->water == NULL ) {	
+					idVec3 impulse = -info.velocity * this->volume * liquid->GetDensity() * 0.25f;
+					impulse = ( impulse * gravityNormal ) * gravityNormal;
+
+					if ( next.i.linearMomentum.LengthSqr() < impulse.LengthSqr() ) {
+						// cancel falling, maintain sideways movement (lateral?)
+						next.i.linearMomentum -= ( next.i.linearMomentum * gravityNormal ) * gravityNormal;
+					} else {
+						next.i.angularMomentum += ( waterCollision.c.point - ( next.i.position + centerOfMass * next.i.orientation ) ).Cross( impulse );
+						next.i.linearMomentum += impulse * 0.5f;
+					}
+				}
+
+				this->SetWater( liquid );
+				this->water->Splash( this->self, this->volume, info, waterCollision );
+			}
+		}
 	}
 
 #ifdef TEST_COLLISION_DETECTION
@@ -214,8 +416,8 @@ bool idPhysics_RigidBody::CheckForCollisions( const float deltaTime, rigidBodyPS
 ================
 idPhysics_RigidBody::ContactFriction
 
-  Does not solve friction for multiple simultaneous contacts but applies contact friction in isolation.
-  Uses absolute velocity at the contact points instead of the velocity relative to the contact object.
+Does not solve friction for multiple simultaneous contacts but applies contact friction in isolation.
+Uses absolute velocity at the contact points instead of the velocity relative to the contact object.
 ================
 */
 void idPhysics_RigidBody::ContactFriction( float deltaTime ) {
@@ -230,13 +432,12 @@ void idPhysics_RigidBody::ContactFriction( float deltaTime ) {
 	massCenter = current.i.position + centerOfMass * current.i.orientation;
 
 	for ( i = 0; i < contacts.Num(); i++ ) {
-
 		r = contacts[i].point - massCenter;
 
 		// calculate velocity at contact point
 		linearVelocity = inverseMass * current.i.linearMomentum;
 		angularVelocity = inverseWorldInertiaTensor * current.i.angularMomentum;
-		velocity = linearVelocity + angularVelocity.Cross(r);
+		velocity = linearVelocity + angularVelocity.Cross( r );
 
 		// velocity along normal vector
 		normalVelocity = ( velocity * contacts[i].normal ) * contacts[i].normal;
@@ -246,11 +447,11 @@ void idPhysics_RigidBody::ContactFriction( float deltaTime ) {
 		magnitude = normal.Normalize();
 		impulseNumerator = contactFriction * magnitude;
 		impulseDenominator = inverseMass + ( ( inverseWorldInertiaTensor * r.Cross( normal ) ).Cross( r ) * normal );
-		impulse = (impulseNumerator / impulseDenominator) * normal;
+		impulse = ( impulseNumerator / impulseDenominator ) * normal;
 
 		// apply friction impulse
 		current.i.linearMomentum += impulse;
-		current.i.angularMomentum += r.Cross(impulse);
+		current.i.angularMomentum += r.Cross( impulse );
 
 		// if moving towards the surface at the contact point
 		if ( normalVelocity * contacts[i].normal < 0.0f ) {
@@ -258,7 +459,7 @@ void idPhysics_RigidBody::ContactFriction( float deltaTime ) {
 			normal = -normalVelocity;
 			impulseNumerator = normal.Normalize();
 			impulseDenominator = inverseMass + ( ( inverseWorldInertiaTensor * r.Cross( normal ) ).Cross( r ) * normal );
-			impulse = (impulseNumerator / impulseDenominator) * normal;
+			impulse = ( impulseNumerator / impulseDenominator ) * normal;
 
 			// apply impulse
 			current.i.linearMomentum += impulse;
@@ -271,11 +472,13 @@ void idPhysics_RigidBody::ContactFriction( float deltaTime ) {
 ================
 idPhysics_RigidBody::TestIfAtRest
 
-  Returns true if the body is considered at rest.
-  Does not catch all cases where the body is at rest but is generally good enough.
+Returns true if the body is considered at rest.
+Does not catch all cases where the body is at rest but is generally good enough.
+
+ * modified for liquid support
 ================
 */
-bool idPhysics_RigidBody::TestIfAtRest( void ) const {
+bool idPhysics_RigidBody::TestIfAtRest( void ) {
 	int i;
 	float gv;
 	idVec3 v, av, normal, point;
@@ -284,6 +487,24 @@ bool idPhysics_RigidBody::TestIfAtRest( void ) const {
 
 	if ( current.atRest >= 0 ) {
 		return true;
+	}
+
+	// do some special checks if the body is in water
+	if ( this->water != NULL ) {
+		if ( this->current.i.linearMomentum.LengthSqr() < WATER_STOP_LINEAR.LengthSqr() &&
+			 this->current.i.angularMomentum.LengthSqr() < WATER_STOP_ANGULAR.LengthSqr() ) {
+		
+			if ( this->noMoveTime == 0 ) {
+				this->noMoveTime = gameLocal.GetTime();	
+			}
+			else if ( this->noMoveTime+NO_MOVE_TIME < gameLocal.GetTime() ) {
+				this->noMoveTime = 0;
+				return true;
+			}
+		}
+		else {
+			this->noMoveTime = 0;
+		}
 	}
 
 	// need at least 3 contact points to come to rest
@@ -296,11 +517,11 @@ bool idPhysics_RigidBody::TestIfAtRest( void ) const {
 	for ( i = 0; i < contacts.Num(); i++ ) {
 		normal += contacts[i].normal;
 	}
-	normal /= (float) contacts.Num();
+	normal /= ( float ) contacts.Num();
 	normal.Normalize();
 
 	// if on a too steep surface
-	if ( (normal * gravityNormal) > -0.7f ) {
+	if ( ( normal * gravityNormal ) > -0.7f ) {
 		return false;
 	}
 
@@ -308,7 +529,7 @@ bool idPhysics_RigidBody::TestIfAtRest( void ) const {
 	contactWinding.Clear();
 	for ( i = 0; i < contacts.Num(); i++ ) {
 		// project point onto plane through origin orthogonal to the gravity
-		point = contacts[i].point - (contacts[i].point * gravityNormal) * gravityNormal;
+		point = contacts[i].point - ( contacts[i].point * gravityNormal ) * gravityNormal;
 		contactWinding.AddToConvexHull( point, gravityNormal );
 	}
 
@@ -319,7 +540,7 @@ bool idPhysics_RigidBody::TestIfAtRest( void ) const {
 
 	// center of mass in world space
 	point = current.i.position + centerOfMass * current.i.orientation;
-	point -= (point * gravityNormal) * gravityNormal;
+	point -= ( point * gravityNormal ) * gravityNormal;
 
 	// if the point is not inside the winding
 	if ( !contactWinding.PointInside( gravityNormal, point, 0 ) ) {
@@ -358,7 +579,7 @@ bool idPhysics_RigidBody::TestIfAtRest( void ) const {
 ================
 idPhysics_RigidBody::DropToFloorAndRest
 
-  Drops the object straight down to the floor and verifies if the object is at rest on the floor.
+Drops the object straight down to the floor and verifies if the object is at rest on the floor.
 ================
 */
 void idPhysics_RigidBody::DropToFloorAndRest( void ) {
@@ -366,12 +587,11 @@ void idPhysics_RigidBody::DropToFloorAndRest( void ) {
 	trace_t tr;
 
 	if ( testSolid ) {
-
 		testSolid = false;
 
 		if ( gameLocal.clip.Contents( current.i.position, clipModel, current.i.orientation, clipMask, self ) ) {
 			gameLocal.DWarning( "rigid body in solid for entity '%s' type '%s' at (%s)",
-								self->name.c_str(), self->GetType()->classname, current.i.position.ToString(0) );
+								self->name.c_str(), self->GetType()->classname, current.i.position.ToString( 0 ) );
 			Rest();
 			dropToFloor = false;
 			return;
@@ -390,13 +610,13 @@ void idPhysics_RigidBody::DropToFloorAndRest( void ) {
 		EvaluateContacts();
 		if ( !TestIfAtRest() ) {
 			gameLocal.DWarning( "rigid body not at rest for entity '%s' type '%s' at (%s)",
-								self->name.c_str(), self->GetType()->classname, current.i.position.ToString(0) );
+								self->name.c_str(), self->GetType()->classname, current.i.position.ToString( 0 ) );
 		}
 		Rest();
 		dropToFloor = false;
 	} else if ( IsOutsideWorld() ) {
 		gameLocal.Warning( "rigid body outside world bounds for entity '%s' type '%s' at (%s)",
-							self->name.c_str(), self->GetType()->classname, current.i.position.ToString(0) );
+							self->name.c_str(), self->GetType()->classname, current.i.position.ToString( 0 ) );
 		Rest();
 		dropToFloor = false;
 	}
@@ -405,29 +625,51 @@ void idPhysics_RigidBody::DropToFloorAndRest( void ) {
 /*
 ================
 idPhysics_RigidBody::DebugDraw
+
+ * modified for liquid support
 ================
 */
 void idPhysics_RigidBody::DebugDraw( void ) {
-
 	if ( rb_showBodies.GetBool() || ( rb_showActive.GetBool() && current.atRest < 0 ) ) {
 		collisionModelManager->DrawModel( clipModel->Handle(), clipModel->GetOrigin(), clipModel->GetAxis(), vec3_origin, 0.0f );
 	}
 
 	if ( rb_showMass.GetBool() ) {
-		gameRenderWorld->DrawText( va( "\n%1.2f", mass ), current.i.position, 0.08f, colorCyan, gameLocal.GetLocalPlayer()->viewAngles.ToMat3(), 1 );
+		if ( this->water != NULL )  {
+			idVec3	pos;
+			float	percent, liquidMass;
+
+			pos = this->current.i.position + this->centerOfMass * this->current.i.orientation;
+			percent = this->GetSubmergedPercent( pos, this->current.i.orientation.Transpose() );
+			liquidMass = this->mass - ( this->volume * this->water->GetDensity() * percent );
+
+			gameRenderWorld->DrawText( va( "\n%1.2f", liquidMass ), current.i.position, 0.08f, colorCyan, gameLocal.GetLocalPlayer()->viewAngles.ToMat3(), 1 );
+		} else {
+			gameRenderWorld->DrawText( va( "\n%1.2f", mass ), current.i.position, 0.08f, colorCyan, gameLocal.GetLocalPlayer()->viewAngles.ToMat3(), 1 );
+		}
 	}
 
 	if ( rb_showInertia.GetBool() ) {
 		idMat3 &I = inertiaTensor;
 		gameRenderWorld->DrawText( va( "\n\n\n( %.1f %.1f %.1f )\n( %.1f %.1f %.1f )\n( %.1f %.1f %.1f )",
-									I[0].x, I[0].y, I[0].z,
-									I[1].x, I[1].y, I[1].z,
-									I[2].x, I[2].y, I[2].z ),
+									I[0].x, I[0].y, I[0].z, I[1].x, I[1].y, I[1].z, I[2].x, I[2].y, I[2].z ),
 									current.i.position, 0.05f, colorCyan, gameLocal.GetLocalPlayer()->viewAngles.ToMat3(), 1 );
 	}
 
 	if ( rb_showVelocity.GetBool() ) {
 		DrawVelocity( clipModel->GetId(), 0.1f, 4.0f );
+	}
+
+	if ( rb_showBuoyancy.GetBool() && this->water != NULL ) {
+		idVec3 pos;
+		idVec3 bCenter;
+		float  percent;
+
+		pos = this->current.i.position + this->centerOfMass * this->current.i.orientation;
+		this->GetBuoyancy( pos, this->current.i.orientation.Transpose(), bCenter, percent );
+
+		gameRenderWorld->DebugArrow(colorGreen,pos,bCenter,1);
+		gameRenderWorld->DrawText( va( "%1.2f",percent), pos, 0.08f, colorCyan, gameLocal.GetLocalPlayer()->viewAngles.ToMat3());
 	}
 }
 
@@ -439,7 +681,7 @@ idPhysics_RigidBody::idPhysics_RigidBody
 idPhysics_RigidBody::idPhysics_RigidBody( void ) {
 
 	// set default rigid body properties
-	SetClipMask( MASK_SOLID );
+	SetClipMask( MASK_SOLID | CONTENTS_BODY );
 	SetBouncyness( 0.6f );
 	SetFriction( 0.6f, 0.6f, 0.0f );
 	clipModel = NULL;
@@ -448,6 +690,10 @@ idPhysics_RigidBody::idPhysics_RigidBody( void ) {
 
 	current.atRest = -1;
 	current.lastTimeStep = USERCMD_MSEC;
+
+	// current needs some more init'ing
+	current.localOrigin.Zero();
+	current.localAxis.Identity();
 
 	current.i.position.Zero();
 	current.i.orientation.Identity();
@@ -464,7 +710,7 @@ idPhysics_RigidBody::idPhysics_RigidBody( void ) {
 	inverseInertiaTensor.Identity();
 
 	// use the least expensive euler integrator
-	integrator = new idODE_Euler( sizeof(rigidBodyIState_t) / sizeof(float), RigidBodyDerivatives, this );
+	integrator = new idODE_Euler( sizeof( rigidBodyIState_t ) / sizeof( float ), RigidBodyDerivatives, this );
 
 	dropToFloor = false;
 	noImpact = false;
@@ -472,6 +718,11 @@ idPhysics_RigidBody::idPhysics_RigidBody( void ) {
 
 	hasMaster = false;
 	isOrientated = false;
+
+	// liquid support --->
+	this->water = NULL;
+	this->noMoveTime = 0.0f;
+	// <---
 
 #ifdef RB_TIMINGS
 	lastTimerReset = 0;
@@ -537,7 +788,6 @@ idPhysics_RigidBody::Save
 ================
 */
 void idPhysics_RigidBody::Save( idSaveGame *savefile ) const {
-
 	idPhysics_RigidBody_SavePState( savefile, current );
 	idPhysics_RigidBody_SavePState( savefile, saved );
 
@@ -548,6 +798,7 @@ void idPhysics_RigidBody::Save( idSaveGame *savefile ) const {
 	savefile->WriteClipModel( clipModel );
 
 	savefile->WriteFloat( mass );
+	savefile->WriteFloat( volume );		// liquid support
 	savefile->WriteFloat( inverseMass );
 	savefile->WriteVec3( centerOfMass );
 	savefile->WriteMat3( inertiaTensor );
@@ -568,7 +819,6 @@ idPhysics_RigidBody::Restore
 ================
 */
 void idPhysics_RigidBody::Restore( idRestoreGame *savefile ) {
-
 	idPhysics_RigidBody_RestorePState( savefile, current );
 	idPhysics_RigidBody_RestorePState( savefile, saved );
 
@@ -579,6 +829,7 @@ void idPhysics_RigidBody::Restore( idRestoreGame *savefile ) {
 	savefile->ReadClipModel( clipModel );
 
 	savefile->ReadFloat( mass );
+	savefile->ReadFloat( volume );		// liquid support
 	savefile->ReadFloat( inverseMass );
 	savefile->ReadVec3( centerOfMass );
 	savefile->ReadMat3( inertiaTensor );
@@ -593,13 +844,13 @@ void idPhysics_RigidBody::Restore( idRestoreGame *savefile ) {
 	savefile->ReadBool( isOrientated );
 }
 
+#define MAX_INERTIA_SCALE		10.0f
+
 /*
 ================
 idPhysics_RigidBody::SetClipModel
 ================
 */
-#define MAX_INERTIA_SCALE		10.0f
-
 void idPhysics_RigidBody::SetClipModel( idClipModel *model, const float density, int id, bool freeOld ) {
 	int minIndex;
 	idMat3 inertiaScale;
@@ -609,7 +860,7 @@ void idPhysics_RigidBody::SetClipModel( idClipModel *model, const float density,
 	assert( model->IsTraceModel() );	// and it should be a trace model
 	assert( density > 0.0f );			// density should be valid
 
-	if ( clipModel && clipModel != model && freeOld ) {
+	if ( clipModel != NULL && clipModel != model && freeOld ) {
 		delete clipModel;
 	}
 	clipModel = model;
@@ -627,6 +878,8 @@ void idPhysics_RigidBody::SetClipModel( idClipModel *model, const float density,
 		inertiaTensor.Identity();
 	}
 
+	this->volume = mass / density;	// liquid support
+
 	// check whether or not the inertia tensor is balanced
 	minIndex = Min3Index( inertiaTensor[0][0], inertiaTensor[1][1], inertiaTensor[2][2] );
 	inertiaScale.Identity();
@@ -637,9 +890,10 @@ void idPhysics_RigidBody::SetClipModel( idClipModel *model, const float density,
 	if ( inertiaScale[0][0] > MAX_INERTIA_SCALE || inertiaScale[1][1] > MAX_INERTIA_SCALE || inertiaScale[2][2] > MAX_INERTIA_SCALE ) {
 		gameLocal.DWarning( "idPhysics_RigidBody::SetClipModel: unbalanced inertia tensor for entity '%s' type '%s'",
 							self->name.c_str(), self->GetType()->classname );
+
 		float min = inertiaTensor[minIndex][minIndex] * MAX_INERTIA_SCALE;
-		inertiaScale[(minIndex+1)%3][(minIndex+1)%3] = min / inertiaTensor[(minIndex+1)%3][(minIndex+1)%3];
-		inertiaScale[(minIndex+2)%3][(minIndex+2)%3] = min / inertiaTensor[(minIndex+2)%3][(minIndex+2)%3];
+		inertiaScale[( minIndex + 1 )%3][( minIndex + 1 )%3] = min / inertiaTensor[( minIndex + 1 )%3][( minIndex + 1 )%3];
+		inertiaScale[( minIndex + 2 )%3][( minIndex + 2 )%3] = min / inertiaTensor[( minIndex + 2 )%3][( minIndex + 2 )%3];
 		inertiaTensor *= inertiaScale;
 	}
 
@@ -676,7 +930,7 @@ idPhysics_RigidBody::SetMass
 void idPhysics_RigidBody::SetMass( float mass, int id ) {
 	assert( mass > 0.0f );
 	inertiaTensor *= mass / this->mass;
-	inverseInertiaTensor = inertiaTensor.Inverse() * (1.0f / 6.0f);
+	inverseInertiaTensor = inertiaTensor.Inverse() * ( 1.0f / 6.0f );
 	this->mass = mass;
 	inverseMass = 1.0f / mass;
 }
@@ -684,10 +938,23 @@ void idPhysics_RigidBody::SetMass( float mass, int id ) {
 /*
 ================
 idPhysics_RigidBody::GetMass
+
+ * modified for liquid support
 ================
 */
 float idPhysics_RigidBody::GetMass( int id ) const {
-	return mass;
+	if ( this->water != NULL ) {
+		idVec3 pos;
+		float  percent,bMass;
+
+        pos = this->current.i.position + this->centerOfMass * this->current.i.orientation;
+        percent = this->GetSubmergedPercent( pos, this->current.i.orientation );
+        bMass = mass - ( this->volume * this->water->GetDensity() * percent );
+
+		return bMass;
+	} else {
+		return mass;
+	}
 }
 
 /*
@@ -696,9 +963,8 @@ idPhysics_RigidBody::SetFriction
 ================
 */
 void idPhysics_RigidBody::SetFriction( const float linear, const float angular, const float contact ) {
-	if (	linear < 0.0f || linear > 1.0f ||
-			angular < 0.0f || angular > 1.0f ||
-			contact < 0.0f || contact > 1.0f ) {
+	if ( linear < 0.0f || linear > 1.0f || angular < 0.0f || angular > 1.0f || contact < 0.0f || contact > 1.0f ) {
+		gameLocal.Warning( "idPhysics_RigidBody::SetFriction: friction out of range, linear = %.1f, angular = %.1f, contact = %.1f", linear, angular, contact );
 		return;
 	}
 	linearFriction = linear;
@@ -763,7 +1029,7 @@ void idPhysics_RigidBody::Activate( void ) {
 ================
 idPhysics_RigidBody::PutToRest
 
-  put to rest untill something collides with this physics object
+Put to rest untill something collides with this physics object
 ================
 */
 void idPhysics_RigidBody::PutToRest( void ) {
@@ -794,7 +1060,9 @@ idPhysics_RigidBody::SetContents
 ================
 */
 void idPhysics_RigidBody::SetContents( int contents, int id ) {
-	clipModel->SetContents( contents );
+	if ( clipModel ) {
+		clipModel->SetContents( contents );
+	}
 }
 
 /*
@@ -828,13 +1096,13 @@ const idBounds &idPhysics_RigidBody::GetAbsBounds( int id ) const {
 ================
 idPhysics_RigidBody::Evaluate
 
-  Evaluate the impulse based rigid body physics.
-  When a collision occurs an impulse is applied at the moment of impact but
-  the remaining time after the collision is ignored.
+Evaluate the impulse based rigid body physics.
+When a collision occurs an impulse is applied at the moment of impact but
+the remaining time after the collision is ignored.
 ================
 */
 bool idPhysics_RigidBody::Evaluate( int timeStepMSec, int endTimeMSec ) {
-	rigidBodyPState_t next;
+	rigidBodyPState_t next_step;
 	idAngles angles;
 	trace_t collision;
 	idVec3 impulse;
@@ -851,13 +1119,14 @@ bool idPhysics_RigidBody::Evaluate( int timeStepMSec, int endTimeMSec ) {
 		oldOrigin = current.i.position;
 		oldAxis = current.i.orientation;
 		self->GetMasterPosition( masterOrigin, masterAxis );
+
 		current.i.position = masterOrigin + current.localOrigin * masterAxis;
 		if ( isOrientated ) {
 			current.i.orientation = current.localAxis * masterAxis;
-		}
-		else {
+		} else {
 			current.i.orientation = current.localAxis;
 		}
+
 		clipModel->Link( gameLocal.clip, self, clipModel->GetId(), current.i.position, current.i.orientation );
 		current.i.linearMomentum = mass * ( ( current.i.position - oldOrigin ) / timeStep );
 		current.i.angularMomentum = inertiaTensor * ( ( current.i.orientation * oldAxis.Transpose() ).ToAngularVelocity() / timeStep );
@@ -885,30 +1154,30 @@ bool idPhysics_RigidBody::Evaluate( int timeStepMSec, int endTimeMSec ) {
 	timer_total.Start();
 #endif
 
-	// move the rigid body velocity into the frame of a pusher
+	//  move the rigid body velocity into the frame of a pusher
 //	current.i.linearMomentum -= current.pushVelocity.SubVec3( 0 ) * mass;
 //	current.i.angularMomentum -= current.pushVelocity.SubVec3( 1 ) * inertiaTensor;
 
 	clipModel->Unlink();
 
-	next = current;
+	next_step = current;
 
 	// calculate next position and orientation
-	Integrate( timeStep, next );
+	Integrate( timeStep, next_step );
 
 #ifdef RB_TIMINGS
 	timer_collision.Start();
 #endif
 
 	// check for collisions from the current to the next state
-	collided = CheckForCollisions( timeStep, next, collision );
+	collided = CheckForCollisions( timeStep, next_step, collision );
 
 #ifdef RB_TIMINGS
 	timer_collision.Stop();
 #endif
 
 	// set the new state
-	current = next;
+	current = next_step;
 
 	if ( collided ) {
 		// apply collision impulse
@@ -939,7 +1208,7 @@ bool idPhysics_RigidBody::Evaluate( int timeStepMSec, int endTimeMSec ) {
 			// put to rest
 			Rest();
 			cameToRest = true;
-		}  else {
+		} else {
 			// apply contact friction
 			ContactFriction( timeStep );
 		}
@@ -969,7 +1238,7 @@ bool idPhysics_RigidBody::Evaluate( int timeStepMSec, int endTimeMSec ) {
 
 	if ( IsOutsideWorld() ) {
 		gameLocal.Warning( "rigid body moved outside world bounds for entity '%s' type '%s' at (%s)",
-					self->name.c_str(), self->GetType()->classname, current.i.position.ToString(0) );
+					self->name.c_str(), self->GetType()->classname, current.i.position.ToString( 0 ) );
 		Rest();
 	}
 
@@ -977,17 +1246,13 @@ bool idPhysics_RigidBody::Evaluate( int timeStepMSec, int endTimeMSec ) {
 	timer_total.Stop();
 
 	if ( rb_showTimings->integer == 1 ) {
-		gameLocal.Printf( "%12s: t %u cd %u\n",
-						self->name.c_str(),
-						timer_total.Milliseconds(), timer_collision.Milliseconds() );
+		gameLocal.Printf( "%12s: t %u cd %u\n", self->name.c_str(), timer_total.Milliseconds(), timer_collision.Milliseconds() );
 		lastTimerReset = 0;
 	}
 	else if ( rb_showTimings->integer == 2 ) {
 		numRigidBodies++;
 		if ( endTimeMSec > lastTimerReset ) {
-			gameLocal.Printf( "rb %d: t %u cd %u\n",
-							numRigidBodies,
-							timer_total.Milliseconds(), timer_collision.Milliseconds() );
+			gameLocal.Printf( "rb %d: t %u cd %u\n", numRigidBodies, timer_total.Milliseconds(), timer_collision.Milliseconds() );
 		}
 	}
 	if ( endTimeMSec > lastTimerReset ) {
@@ -1127,8 +1392,7 @@ void idPhysics_RigidBody::SetOrigin( const idVec3 &newOrigin, int id ) {
 	if ( hasMaster ) {
 		self->GetMasterPosition( masterOrigin, masterAxis );
 		current.i.position = masterOrigin + newOrigin * masterAxis;
-	}
-	else {
+	} else {
 		current.i.position = newOrigin;
 	}
 
@@ -1150,8 +1414,7 @@ void idPhysics_RigidBody::SetAxis( const idMat3 &newAxis, int id ) {
 	if ( hasMaster && isOrientated ) {
 		self->GetMasterPosition( masterOrigin, masterAxis );
 		current.i.orientation = newAxis * masterAxis;
-	}
-	else {
+	} else {
 		current.i.orientation = newAxis;
 	}
 
@@ -1166,7 +1429,6 @@ idPhysics::Move
 ================
 */
 void idPhysics_RigidBody::Translate( const idVec3 &translation, int id ) {
-
 	current.localOrigin += translation;
 	current.i.position += translation;
 
@@ -1191,8 +1453,7 @@ void idPhysics_RigidBody::Rotate( const idRotation &rotation, int id ) {
 		self->GetMasterPosition( masterOrigin, masterAxis );
 		current.localAxis *= rotation.ToMat3();
 		current.localOrigin = ( current.i.position - masterOrigin ) * masterAxis.Transpose();
-	}
-	else {
+	} else {
 		current.localAxis = current.i.orientation;
 		current.localOrigin = current.i.position;
 	}
@@ -1273,12 +1534,11 @@ idPhysics_RigidBody::ClipTranslation
 void idPhysics_RigidBody::ClipTranslation( trace_t &results, const idVec3 &translation, const idClipModel *model ) const {
 	if ( model ) {
 		gameLocal.clip.TranslationModel( results, clipModel->GetOrigin(), clipModel->GetOrigin() + translation,
-											clipModel, clipModel->GetAxis(), clipMask,
-											model->Handle(), model->GetOrigin(), model->GetAxis() );
-	}
-	else {
+										 clipModel, clipModel->GetAxis(), clipMask,
+										 model->Handle(), model->GetOrigin(), model->GetAxis() );
+	} else {
 		gameLocal.clip.Translation( results, clipModel->GetOrigin(), clipModel->GetOrigin() + translation,
-											clipModel, clipModel->GetAxis(), clipMask, self );
+									clipModel, clipModel->GetAxis(), clipMask, self );
 	}
 }
 
@@ -1290,12 +1550,11 @@ idPhysics_RigidBody::ClipRotation
 void idPhysics_RigidBody::ClipRotation( trace_t &results, const idRotation &rotation, const idClipModel *model ) const {
 	if ( model ) {
 		gameLocal.clip.RotationModel( results, clipModel->GetOrigin(), rotation,
-											clipModel, clipModel->GetAxis(), clipMask,
-											model->Handle(), model->GetOrigin(), model->GetAxis() );
-	}
-	else {
+									  clipModel, clipModel->GetAxis(), clipMask,
+									  model->Handle(), model->GetOrigin(), model->GetAxis() );
+	} else {
 		gameLocal.clip.Rotation( results, clipModel->GetOrigin(), rotation,
-											clipModel, clipModel->GetAxis(), clipMask, self );
+								clipModel, clipModel->GetAxis(), clipMask, self );
 	}
 }
 
@@ -1307,9 +1566,8 @@ idPhysics_RigidBody::ClipContents
 int idPhysics_RigidBody::ClipContents( const idClipModel *model ) const {
 	if ( model ) {
 		return gameLocal.clip.ContentsModel( clipModel->GetOrigin(), clipModel, clipModel->GetAxis(), -1,
-									model->Handle(), model->GetOrigin(), model->GetAxis() );
-	}
-	else {
+											 model->Handle(), model->GetOrigin(), model->GetAxis() );
+	} else {
 		return gameLocal.clip.Contents( clipModel->GetOrigin(), clipModel, clipModel->GetAxis(), -1, NULL );
 	}
 }
@@ -1363,12 +1621,11 @@ bool idPhysics_RigidBody::EvaluateContacts( void ) {
 
 	contacts.SetNum( 10, false );
 
-	dir.SubVec3(0) = current.i.linearMomentum + current.lastTimeStep * gravityVector * mass;
-	dir.SubVec3(1) = current.i.angularMomentum;
-	dir.SubVec3(0).Normalize();
-	dir.SubVec3(1).Normalize();
-	num = gameLocal.clip.Contacts( &contacts[0], 10, clipModel->GetOrigin(),
-					dir, CONTACT_EPSILON, clipModel, clipModel->GetAxis(), clipMask, self );
+	dir.SubVec3( 0 ) = current.i.linearMomentum + current.lastTimeStep * gravityVector * mass;
+	dir.SubVec3( 1 ) = current.i.angularMomentum;
+	dir.SubVec3( 0 ).Normalize();
+	dir.SubVec3( 1 ).Normalize();
+	num = gameLocal.clip.Contacts( &contacts[0], 10, clipModel->GetOrigin(), dir, CONTACT_EPSILON, clipModel, clipModel->GetAxis(), clipMask, self );
 	contacts.SetNum( num, false );
 
 	AddContactEntitiesForContacts();
@@ -1387,8 +1644,8 @@ void idPhysics_RigidBody::SetPushed( int deltaTime ) {
 	rotation = ( saved.i.orientation * current.i.orientation ).ToRotation();
 
 	// velocity with which the af is pushed
-	current.pushVelocity.SubVec3(0) += ( current.i.position - saved.i.position ) / ( deltaTime * idMath::M_MS2SEC );
-	current.pushVelocity.SubVec3(1) += rotation.GetVec() * -DEG2RAD( rotation.GetAngle() ) / ( deltaTime * idMath::M_MS2SEC );
+	current.pushVelocity.SubVec3( 0 ) += ( current.i.position - saved.i.position ) / ( deltaTime * idMath::M_MS2SEC );
+	current.pushVelocity.SubVec3( 1 ) += rotation.GetVec() * -DEG2RAD( rotation.GetAngle() ) / ( deltaTime * idMath::M_MS2SEC );
 }
 
 /*
@@ -1397,7 +1654,7 @@ idPhysics_RigidBody::GetPushedLinearVelocity
 ================
 */
 const idVec3 &idPhysics_RigidBody::GetPushedLinearVelocity( const int id ) const {
-	return current.pushVelocity.SubVec3(0);
+	return current.pushVelocity.SubVec3( 0 );
 }
 
 /*
@@ -1406,7 +1663,7 @@ idPhysics_RigidBody::GetPushedAngularVelocity
 ================
 */
 const idVec3 &idPhysics_RigidBody::GetPushedAngularVelocity( const int id ) const {
-	return current.pushVelocity.SubVec3(1);
+	return current.pushVelocity.SubVec3( 1 );
 }
 
 /*
@@ -1425,8 +1682,7 @@ void idPhysics_RigidBody::SetMaster( idEntity *master, const bool orientated ) {
 			current.localOrigin = ( current.i.position - masterOrigin ) * masterAxis.Transpose();
 			if ( orientated ) {
 				current.localAxis = current.i.orientation * masterAxis.Transpose();
-			}
-			else {
+			} else {
 				current.localAxis = current.i.orientation;
 			}
 			hasMaster = true;

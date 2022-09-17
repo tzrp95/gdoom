@@ -27,28 +27,29 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 #include "sys/platform.h"
+
 #include "gamesys/SaveGame.h"
 #include "Entity.h"
 #include "Game_local.h"
 
 #include "physics/Clip.h"
 
-#define	MAX_SECTOR_DEPTH				12
-#define MAX_SECTORS						((1<<(MAX_SECTOR_DEPTH+1))-1)
+#define	MAX_SECTOR_DEPTH			12
+#define MAX_SECTORS					( ( 1 << (MAX_SECTOR_DEPTH + 1 ) ) - 1 )
 
 typedef struct clipSector_s {
 	int						axis;		// -1 = leaf node
 	float					dist;
-	struct clipSector_s *	children[2];
-	struct clipLink_s *		clipLinks;
+	struct clipSector_s		*children[2];
+	struct clipLink_s		*clipLinks;
 } clipSector_t;
 
 typedef struct clipLink_s {
-	idClipModel *			clipModel;
-	struct clipSector_s *	sector;
-	struct clipLink_s *		prevInSector;
-	struct clipLink_s *		nextInSector;
-	struct clipLink_s *		nextLink;
+	idClipModel				*clipModel;
+	struct clipSector_s		*sector;
+	struct clipLink_s		*prevInSector;
+	struct clipLink_s		*nextInSector;
+	struct clipLink_s		*nextLink;
 } clipLink_t;
 
 typedef struct trmCache_s {
@@ -62,7 +63,6 @@ typedef struct trmCache_s {
 idVec3 vec3_boxEpsilon( CM_BOX_EPSILON, CM_BOX_EPSILON, CM_BOX_EPSILON );
 
 idBlockAlloc<clipLink_t, 1024>	clipLinkAllocator;
-
 
 /*
 ===============================================================
@@ -200,7 +200,6 @@ void idClipModel::RestoreTraceModels( idRestoreGame *savefile ) {
 	}
 }
 
-
 /*
 ===============================================================
 
@@ -241,6 +240,7 @@ void idClipModel::LoadModel( const idTraceModel &trm ) {
 	renderModelHandle = -1;
 	if ( traceModelIndex != -1 ) {
 		FreeTraceModel( traceModelIndex );
+		traceModelIndex = -1;
 	}
 	traceModelIndex = AllocTraceModel( trm );
 	bounds = trm.bounds;
@@ -365,6 +365,7 @@ idClipModel::~idClipModel( void ) {
 	Unlink();
 	if ( traceModelIndex != -1 ) {
 		FreeTraceModel( traceModelIndex );
+		traceModelIndex = -1;
 	}
 }
 
@@ -405,9 +406,9 @@ void idClipModel::Restore( idRestoreGame *savefile ) {
 	bool linked;
 
 	savefile->ReadBool( enabled );
-	savefile->ReadObject( reinterpret_cast<idClass *&>( entity ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( entity ) );
 	savefile->ReadInt( id );
-	savefile->ReadObject( reinterpret_cast<idClass *&>( owner ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( owner ) );
 	savefile->ReadVec3( origin );
 	savefile->ReadMat3( axis );
 	savefile->ReadBounds( bounds );
@@ -515,7 +516,7 @@ idClipModel::Link_r
 void idClipModel::Link_r( struct clipSector_s *node ) {
 	clipLink_t *link;
 
-	while( node->axis != -1 ) {
+	while ( node->axis != -1 ) {
 		if ( absBounds[0][node->axis] > node->dist ) {
 			node = node->children[0];
 		} else if ( absBounds[1][node->axis] < node->dist ) {
@@ -583,7 +584,6 @@ idClipModel::Link
 ===============
 */
 void idClipModel::Link( idClip &clp, idEntity *ent, int newId, const idVec3 &newOrigin, const idMat3 &newAxis, int renderModelHandle ) {
-
 	this->entity = ent;
 	this->id = newId;
 	this->origin = newOrigin;
@@ -606,7 +606,6 @@ idClipModel::CheckModel
 cmHandle_t idClipModel::CheckModel( const char *name ) {
 	return collisionModelManager->LoadModel( name, false );
 }
-
 
 /*
 ===============================================================
@@ -692,9 +691,11 @@ void idClip::Init( void ) {
 	memset( clipSectors, 0, MAX_SECTORS * sizeof( clipSector_t ) );
 	numClipSectors = 0;
 	touchCount = -1;
+
 	// get world map bounds
 	h = collisionModelManager->LoadModel( "worldMap", false );
 	collisionModelManager->GetModelBounds( h, worldBounds );
+
 	// create world sectors
 	CreateClipSectors_r( 0, worldBounds, maxSector );
 
@@ -733,22 +734,21 @@ void idClip::Shutdown( void ) {
 	clipLinkAllocator.Shutdown();
 }
 
+typedef struct listParms_s {
+	idBounds		bounds;
+	int				contentMask;
+	idClipModel		**list;
+	int				count;
+	int				maxCount;
+} listParms_t;
+
 /*
 ====================
 idClip::ClipModelsTouchingBounds_r
 ====================
 */
-typedef struct listParms_s {
-	idBounds		bounds;
-	int				contentMask;
-	idClipModel	**	list;
-	int				count;
-	int				maxCount;
-} listParms_t;
-
 void idClip::ClipModelsTouchingBounds_r( const struct clipSector_s *node, listParms_t &parms ) const {
-
-	while( node->axis != -1 ) {
+	while ( node->axis != -1 ) {
 		if ( parms.bounds[0][node->axis] > node->dist ) {
 			node = node->children[0];
 		} else if ( parms.bounds[1][node->axis] < node->dist ) {
@@ -804,8 +804,6 @@ idClip::ClipModelsTouchingBounds
 ================
 */
 int idClip::ClipModelsTouchingBounds( const idBounds &bounds, int contentMask, idClipModel **clipModelList, int maxCount ) const {
-	listParms_t parms;
-
 	if (	bounds[0][0] > bounds[1][0] ||
 			bounds[0][1] > bounds[1][1] ||
 			bounds[0][2] > bounds[1][2] ) {
@@ -814,6 +812,7 @@ int idClip::ClipModelsTouchingBounds( const idBounds &bounds, int contentMask, i
 		return 0;
 	}
 
+	listParms_t parms;
 	parms.bounds[0] = bounds[0] - vec3_boxEpsilon;
 	parms.bounds[1] = bounds[1] + vec3_boxEpsilon;
 	parms.contentMask = contentMask;
@@ -862,11 +861,11 @@ int idClip::EntitiesTouchingBounds( const idBounds &bounds, int contentMask, idE
 ====================
 idClip::GetTraceClipModels
 
-  an ent will be excluded from testing if:
-  cm->entity == passEntity ( don't clip against the pass entity )
-  cm->entity == passOwner ( missiles don't clip with owner )
-  cm->owner == passEntity ( don't interact with your own missiles )
-  cm->owner == passOwner ( don't interact with other missiles from same owner )
+An ent will be excluded from testing if:
+ * cm->entity == passEntity ( don't clip against the pass entity )
+ * cm->entity == passOwner ( missiles don't clip with owner )
+ * cm->owner == passEntity ( don't interact with your own missiles )
+ * cm->owner == passOwner ( don't interact with other missiles from same owner )
 ====================
 */
 int idClip::GetTraceClipModels( const idBounds &bounds, int contentMask, const idEntity *passEntity, idClipModel **clipModelList ) const {
@@ -887,7 +886,6 @@ int idClip::GetTraceClipModels( const idBounds &bounds, int contentMask, const i
 	}
 
 	for ( i = 0; i < num; i++ ) {
-
 		cm = clipModelList[i];
 
 		// check if we should ignore this entity
@@ -964,9 +962,22 @@ idClip::TestHugeTranslation
 ============
 */
 ID_INLINE bool TestHugeTranslation( trace_t &results, const idClipModel *mdl, const idVec3 &start, const idVec3 &end, const idMat3 &trmAxis ) {
+
 	if ( mdl != NULL && ( end - start ).LengthSqr() > Square( CM_MAX_TRACE_DIST ) ) {
+	/*
+		// This occurs in CTF when a player connectsand spawns
+		// in the PVS of a player that has a flag that is spawning the idMoveableItem
+		// "nuggets". The error seems benign and the assert was getting in the way
+		// of testing.
+		assert( 0 );
 
-
+		if ( mdl->GetEntity() != NULL && idStr::Cmp(mdl->GetEntity()->GetName(), "monster_zsec_shotgun_12") == 0
+			 && idStr::Cmp(gameLocal.GetMapName(), "maps/game/alphalabs4.map") == 0 ) {
+			// there is a map bug in alpha4 where the ride of death can push a monster far into the void
+			// don't assert there
+			return true;
+		}
+	*/
 		results.fraction = 0.0f;
 		results.endpos = start;
 		results.endAxis = trmAxis;
@@ -979,18 +990,7 @@ ID_INLINE bool TestHugeTranslation( trace_t &results, const idClipModel *mdl, co
 		} else {
 			gameLocal.Printf( "huge translation for clip model %d\n", mdl->GetId() );
 		}
-
-		gameLocal.Printf( "  from (%.2f %.2f %.2f) to (%.2f %.2f %.2f)\n", start.x, start.y, start.z, end.x, end.y, end.z);
-
-		if ( mdl->GetEntity() != NULL && idStr::Cmp(mdl->GetEntity()->GetName(), "monster_zsec_shotgun_12") == 0
-		     && idStr::Cmp(gameLocal.GetMapName(), "maps/game/alphalabs4.map") == 0 )
-		{
-			// there is a map bug in alpha4 where the ride of death can push a monster far into the void
-			// don't assert there
-			return true;
-		}
-
-		assert( 0 );
+		gameLocal.Printf( "  from (%.2f %.2f %.2f) to (%.2f %.2f %.2f)\n", start.x, start.y, start.z, end.x, end.y, end.z );
 		return true;
 	}
 	return false;
@@ -1020,7 +1020,7 @@ void idClip::TranslationEntities( trace_t &results, const idVec3 &start, const i
 	results.endpos = end;
 	results.endAxis = trmAxis;
 
-	if ( !trm ) {
+	if ( trm == NULL ) {
 		traceBounds.FromPointTranslation( start, end - start );
 		radius = 0.0f;
 	} else {
@@ -1033,7 +1033,7 @@ void idClip::TranslationEntities( trace_t &results, const idVec3 &start, const i
 	for ( i = 0; i < num; i++ ) {
 		touch = clipModelList[i];
 
-		if ( !touch ) {
+		if ( touch == NULL ) {
 			continue;
 		}
 
@@ -1092,7 +1092,7 @@ bool idClip::Translation( trace_t &results, const idVec3 &start, const idVec3 &e
 		results.endAxis = trmAxis;
 	}
 
-	if ( !trm ) {
+	if ( trm == NULL ) {
 		traceBounds.FromPointTranslation( start, results.endpos - start );
 		radius = 0.0f;
 	} else {
@@ -1105,7 +1105,7 @@ bool idClip::Translation( trace_t &results, const idVec3 &start, const idVec3 &e
 	for ( i = 0; i < num; i++ ) {
 		touch = clipModelList[i];
 
-		if ( !touch ) {
+		if ( touch == NULL ) {
 			continue;
 		}
 
@@ -1161,7 +1161,7 @@ bool idClip::Rotation( trace_t &results, const idVec3 &start, const idRotation &
 		results.endAxis = trmAxis * rotation.ToMat3();
 	}
 
-	if ( !trm ) {
+	if ( trm == NULL ) {
 		traceBounds.FromPointRotation( start, rotation );
 	} else {
 		traceBounds.FromBoundsRotation( trm->bounds, start, trmAxis, rotation );
@@ -1172,7 +1172,7 @@ bool idClip::Rotation( trace_t &results, const idVec3 &start, const idRotation &
 	for ( i = 0; i < num; i++ ) {
 		touch = clipModelList[i];
 
-		if ( !touch ) {
+		if ( touch == NULL ) {
 			continue;
 		}
 
@@ -1271,7 +1271,7 @@ bool idClip::Motion( trace_t &results, const idVec3 &start, const idVec3 &end, c
 		for ( i = 0; i < num; i++ ) {
 			touch = clipModelList[i];
 
-			if ( !touch ) {
+			if ( touch == NULL ) {
 				continue;
 			}
 
@@ -1323,7 +1323,7 @@ bool idClip::Motion( trace_t &results, const idVec3 &start, const idVec3 &end, c
 		for ( i = 0; i < num; i++ ) {
 			touch = clipModelList[i];
 
-			if ( !touch ) {
+			if ( touch == NULL ) {
 				continue;
 			}
 
@@ -1390,7 +1390,7 @@ int idClip::Contacts( contactInfo_t *contacts, const int maxContacts, const idVe
 		return numContacts;
 	}
 
-	if ( !trm ) {
+	if ( trm == NULL ) {
 		traceBounds = idBounds( start ).Expand( depth );
 	} else {
 		traceBounds.FromTransformedBounds( trm->bounds, start, trmAxis );
@@ -1402,7 +1402,7 @@ int idClip::Contacts( contactInfo_t *contacts, const int maxContacts, const idVe
 	for ( i = 0; i < num; i++ ) {
 		touch = clipModelList[i];
 
-		if ( !touch ) {
+		if ( touch == NULL ) {
 			continue;
 		}
 
@@ -1413,7 +1413,7 @@ int idClip::Contacts( contactInfo_t *contacts, const int maxContacts, const idVe
 
 		idClip::numContacts++;
 		n = collisionModelManager->Contacts( contacts + numContacts, maxContacts - numContacts,
-								start, dir, depth, trm, trmAxis, contentMask,
+									start, dir, depth, trm, trmAxis, contentMask,
 									touch->Handle(), touch->origin, touch->axis );
 
 		for ( j = 0; j < n; j++ ) {
@@ -1451,7 +1451,7 @@ int idClip::Contents( const idVec3 &start, const idClipModel *mdl, const idMat3 
 		contents = 0;
 	}
 
-	if ( !trm ) {
+	if ( trm == NULL ) {
 		traceBounds[0] = start;
 		traceBounds[1] = start;
 	} else if ( trmAxis.IsRotated() ) {
@@ -1466,7 +1466,7 @@ int idClip::Contents( const idVec3 &start, const idClipModel *mdl, const idMat3 
 	for ( i = 0; i < num; i++ ) {
 		touch = clipModelList[i];
 
-		if ( !touch ) {
+		if ( touch == NULL ) {
 			continue;
 		}
 
@@ -1574,7 +1574,7 @@ bool idClip::GetModelContactFeature( const contactInfo_t &contact, const idClipM
 
 	// if contact with a collision model
 	if ( handle != -1 ) {
-		switch( contact.type ) {
+		switch ( contact.type ) {
 			case CONTACT_EDGE: {
 				// the model contact feature is a collision model edge
 				collisionModelManager->GetModelEdge( handle, contact.modelFeature, start, end );
@@ -1615,6 +1615,7 @@ idClip::PrintStatistics
 void idClip::PrintStatistics( void ) {
 	gameLocal.Printf( "t = %-3d, r = %-3d, m = %-3d, render = %-3d, contents = %-3d, contacts = %-3d\n",
 					numTranslations, numRotations, numMotions, numRenderModelTraces, numContents, numContacts );
+
 	numRotations = numTranslations = numMotions = numRenderModelTraces = numContents = numContacts = 0;
 }
 
@@ -1668,7 +1669,7 @@ bool idClip::DrawModelContactFeature( const contactInfo_t &contact, const idClip
 		gameRenderWorld->DebugLine( colorWhite, winding[0].ToVec3() - 1.0f * axis[2], winding[0].ToVec3() + 1.0f * axis[2], lifetime );
 	} else {
 		for ( i = 0; i < winding.GetNumPoints(); i++ ) {
-			gameRenderWorld->DebugLine( colorCyan, winding[i].ToVec3(), winding[(i+1)%winding.GetNumPoints()].ToVec3(), lifetime );
+			gameRenderWorld->DebugLine( colorCyan, winding[i].ToVec3(), winding[( i+1 )%winding.GetNumPoints()].ToVec3(), lifetime );
 		}
 	}
 

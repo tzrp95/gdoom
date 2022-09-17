@@ -38,8 +38,9 @@ If you have questions concerning this license or the applicable additional terms
 
 	Rigid body physics
 
-	Employs an impulse based dynamic simulation which is not very accurate but
-	relatively fast and still reliable due to the continuous collision detection.
+	Employs an impulse based dynamic simulation which is not very accurate
+	but relatively fast and still reliable due to the continuous collision
+	detection.
 
 ===================================================================================
 */
@@ -54,6 +55,13 @@ typedef struct rididBodyIState_s {
 	idMat3					orientation;				// orientation of trace model
 	idVec3					linearMomentum;				// translational momentum relative to center of mass
 	idVec3					angularMomentum;			// rotational momentum relative to center of mass
+
+	rididBodyIState_s() :
+		position( vec3_zero ),
+		orientation( mat3_identity ),
+		linearMomentum( vec3_zero ),
+		angularMomentum( vec3_zero ) {
+	}
 } rigidBodyIState_t;
 
 typedef struct rigidBodyPState_s {
@@ -65,6 +73,16 @@ typedef struct rigidBodyPState_s {
 	idVec3					externalForce;				// external force relative to center of mass
 	idVec3					externalTorque;				// external torque relative to center of mass
 	rigidBodyIState_t		i;							// state used for integration
+
+	rigidBodyPState_s() :
+		atRest( true ),
+		lastTimeStep( 0 ),
+		localOrigin( vec3_zero ),
+		localAxis( mat3_identity ),
+		pushVelocity( vec6_zero ),
+		externalForce( vec3_zero ),
+		externalTorque( vec3_zero ) {
+	}
 } rigidBodyPState_t;
 
 class idPhysics_RigidBody : public idPhysics_Base {
@@ -92,7 +110,7 @@ public:
 
 public:	// common physics interface
 	void					SetClipModel( idClipModel *model, float density, int id = 0, bool freeOld = true );
-	idClipModel *			GetClipModel( int id = 0 ) const;
+	idClipModel				*GetClipModel( int id = 0 ) const;
 	int						GetNumClipModels( void ) const;
 
 	void					SetMass( float mass, int id = -1 );
@@ -101,8 +119,8 @@ public:	// common physics interface
 	void					SetContents( int contents, int id = -1 );
 	int						GetContents( int id = -1 ) const;
 
-	const idBounds &		GetBounds( int id = -1 ) const;
-	const idBounds &		GetAbsBounds( int id = -1 ) const;
+	const idBounds			&GetBounds( int id = -1 ) const;
+	const idBounds			&GetAbsBounds( int id = -1 ) const;
 
 	bool					Evaluate( int timeStepMSec, int endTimeMSec );
 	void					UpdateTime( int endTimeMSec );
@@ -126,14 +144,14 @@ public:	// common physics interface
 	void					Translate( const idVec3 &translation, int id = -1 );
 	void					Rotate( const idRotation &rotation, int id = -1 );
 
-	const idVec3 &			GetOrigin( int id = 0 ) const;
-	const idMat3 &			GetAxis( int id = 0 ) const;
+	const idVec3			&GetOrigin( int id = 0 ) const;
+	const idMat3			&GetAxis( int id = 0 ) const;
 
 	void					SetLinearVelocity( const idVec3 &newLinearVelocity, int id = 0 );
 	void					SetAngularVelocity( const idVec3 &newAngularVelocity, int id = 0 );
 
-	const idVec3 &			GetLinearVelocity( int id = 0 ) const;
-	const idVec3 &			GetAngularVelocity( int id = 0 ) const;
+	const idVec3			&GetLinearVelocity( int id = 0 ) const;
+	const idVec3			&GetAngularVelocity( int id = 0 ) const;
 
 	void					ClipTranslation( trace_t &results, const idVec3 &translation, const idClipModel *model ) const;
 	void					ClipRotation( trace_t &results, const idRotation &rotation, const idClipModel *model ) const;
@@ -148,8 +166,8 @@ public:	// common physics interface
 	bool					EvaluateContacts( void );
 
 	void					SetPushed( int deltaTime );
-	const idVec3 &			GetPushedLinearVelocity( const int id = 0 ) const;
-	const idVec3 &			GetPushedAngularVelocity( const int id = 0 ) const;
+	const idVec3			&GetPushedLinearVelocity( const int id = 0 ) const;
+	const idVec3			&GetPushedAngularVelocity( const int id = 0 ) const;
 
 	void					SetMaster( idEntity *master, const bool orientated );
 
@@ -166,7 +184,7 @@ private:
 	float					angularFriction;			// rotational friction
 	float					contactFriction;			// friction with contact surfaces
 	float					bouncyness;					// bouncyness
-	idClipModel *			clipModel;					// clip model used for collision detection
+	idClipModel				*clipModel;					// clip model used for collision detection
 
 	// derived properties
 	float					mass;						// mass of body
@@ -175,7 +193,7 @@ private:
 	idMat3					inertiaTensor;				// mass distribution
 	idMat3					inverseInertiaTensor;		// inverse inertia tensor
 
-	idODE *					integrator;					// integrator
+	idODE					*integrator;				// integrator
 	bool					dropToFloor;				// true if dropping to the floor and putting to rest
 	bool					testSolid;					// true if testing for solid when dropping to the floor
 	bool					noImpact;					// if true do not activate when another object collides
@@ -185,6 +203,11 @@ private:
 	bool					hasMaster;
 	bool					isOrientated;
 
+	// liquid support
+	float					volume;						// object volume 
+	int						noMoveTime;					// suspend simulation if hardly any movement for this many seconds
+
+
 private:
 	friend void				RigidBodyDerivatives( const float t, const void *clientData, const float *state, float *derivatives );
 	void					Integrate( const float deltaTime, rigidBodyPState_t &next );
@@ -192,9 +215,15 @@ private:
 	bool					CollisionImpulse( const trace_t &collision, idVec3 &impulse );
 	void					ContactFriction( float deltaTime );
 	void					DropToFloorAndRest( void );
-	bool					TestIfAtRest( void ) const;
+	bool					TestIfAtRest( void );
 	void					Rest( void );
 	void					DebugDraw( void );
+
+	// liquid support
+							// Approximates the center of mass of the submerged portion of the rigid body.
+	virtual bool			GetBuoyancy( const idVec3 &pos, const idMat3 &rotation, idVec3 &bCenter, float &percent ) const;
+							// Returns a rough estimate of which percent of the body is in wate
+	virtual float			GetSubmergedPercent( const idVec3 &pos, const idMat3 &rotation ) const;
 };
 
 #endif /* !__PHYSICS_RIGIDBODY_H__ */

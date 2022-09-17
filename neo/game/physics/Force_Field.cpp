@@ -27,9 +27,11 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 #include "sys/platform.h"
+
 #include "physics/Physics_Player.h"
 #include "physics/Physics_Monster.h"
 #include "WorldSpawn.h"
+#include "Player.h"
 
 #include "physics/Force_Field.h"
 
@@ -58,7 +60,7 @@ idForce_Field::~idForce_Field
 ================
 */
 idForce_Field::~idForce_Field( void ) {
-	if ( this->clipModel ) {
+	if ( this->clipModel != NULL ) {
 		delete this->clipModel;
 	}
 }
@@ -85,8 +87,8 @@ idForce_Field::Restore
 ================
 */
 void idForce_Field::Restore( idRestoreGame *savefile ) {
-	savefile->ReadInt( (int &)type );
-	savefile->ReadInt( (int &)applyType);
+	savefile->ReadInt( ( int& )type );
+	savefile->ReadInt( ( int& )applyType );
 	savefile->ReadFloat( magnitude );
 	savefile->ReadVec3( dir );
 	savefile->ReadFloat( randomTorque );
@@ -101,7 +103,7 @@ idForce_Field::SetClipModel
 ================
 */
 void idForce_Field::SetClipModel( idClipModel *clipModel ) {
-	if ( this->clipModel && clipModel != this->clipModel ) {
+	if ( this->clipModel != NULL && clipModel != this->clipModel ) {
 		delete this->clipModel;
 	}
 	this->clipModel = clipModel;
@@ -167,19 +169,16 @@ void idForce_Field::Evaluate( int time ) {
 
 	for ( i = 0; i < numClipModels; i++ ) {
 		cm = clipModelList[ i ];
-
 		if ( !cm->IsTraceModel() ) {
 			continue;
 		}
 
 		idEntity *entity = cm->GetEntity();
-
 		if ( !entity ) {
 			continue;
 		}
 
 		idPhysics *physics = entity->GetPhysics();
-
 		if ( playerOnly ) {
 			if ( !physics->IsType( idPhysics_Player::Type ) ) {
 				continue;
@@ -190,12 +189,20 @@ void idForce_Field::Evaluate( int time ) {
 			}
 		}
 
+		// ignore noclipping players
+		if ( !monsterOnly ) {
+			idEntity *entity = cm->GetEntity();
+			if ( entity->IsType( idPlayer::Type ) && static_cast<idPlayer*>( entity )->noclip ) {
+				continue;
+			}
+		}
+
 		if ( !gameLocal.clip.ContentsModel( cm->GetOrigin(), cm, cm->GetAxis(), -1,
 									clipModel->Handle(), clipModel->GetOrigin(), clipModel->GetAxis() ) ) {
 			continue;
 		}
 
-		switch( type ) {
+		switch ( type ) {
 			case FORCEFIELD_UNIFORM: {
 				force = dir;
 				break;
@@ -225,12 +232,11 @@ void idForce_Field::Evaluate( int time ) {
 			}
 		}
 
-		switch( applyType ) {
+		switch ( applyType ) {
 			case FORCEFIELD_APPLY_FORCE: {
 				if ( randomTorque != 0.0f ) {
 					entity->AddForce( gameLocal.world, cm->GetId(), cm->GetOrigin() + torque.Cross( dir ) * randomTorque, dir * magnitude );
-				}
-				else {
+				} else {
 					entity->AddForce( gameLocal.world, cm->GetId(), cm->GetOrigin(), force * magnitude );
 				}
 				break;
@@ -239,15 +245,14 @@ void idForce_Field::Evaluate( int time ) {
 				physics->SetLinearVelocity( force * magnitude, cm->GetId() );
 				if ( randomTorque != 0.0f ) {
 					angularVelocity = physics->GetAngularVelocity( cm->GetId() );
-					physics->SetAngularVelocity( 0.5f * (angularVelocity + torque * randomTorque), cm->GetId() );
+					physics->SetAngularVelocity( 0.5f * ( angularVelocity + torque * randomTorque ), cm->GetId() );
 				}
 				break;
 			}
 			case FORCEFIELD_APPLY_IMPULSE: {
 				if ( randomTorque != 0.0f ) {
 					entity->ApplyImpulse( gameLocal.world, cm->GetId(), cm->GetOrigin() + torque.Cross( dir ) * randomTorque, dir * magnitude );
-				}
-				else {
+				} else {
 					entity->ApplyImpulse( gameLocal.world, cm->GetId(), cm->GetOrigin(), force * magnitude );
 				}
 				break;
