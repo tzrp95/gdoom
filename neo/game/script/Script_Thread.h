@@ -98,7 +98,7 @@ private:
 	bool						manualControl;
 
 	static int					threadIndex;
-	static idList<idThread *>	threadList;
+	static idList<idThread*>	threadList;
 
 	static trace_t				trace;
 
@@ -125,6 +125,7 @@ private:
 	void						Event_SetCvar( const char *name, const char *value ) const;
 	void						Event_GetCvar( const char *name ) const;
 	void						Event_Random( float range ) const;
+	void						Event_RandomInt( int range ) const;
 	void						Event_GetTime( void );
 	void						Event_KillThread( const char *name );
 	void						Event_GetEntity( const char *name );
@@ -144,12 +145,16 @@ private:
 	void						Event_AngToUp( idAngles &ang );
 	void						Event_GetSine( float angle );
 	void						Event_GetCosine( float angle );
+	void						Event_GetArcSine( float a );
+	void						Event_GetArcCosine( float a );
 	void						Event_GetSquareRoot( float theSquare );
 	void						Event_VecNormalize( idVec3 &vec );
 	void						Event_VecLength( idVec3 &vec );
 	void						Event_VecDotProduct( idVec3 &vec1, idVec3 &vec2 );
 	void						Event_VecCrossProduct( idVec3 &vec1, idVec3 &vec2 );
 	void						Event_VecToAngles( idVec3 &vec );
+	void						Event_VecToOrthoBasisAngles( idVec3 &vec );
+	void						Event_RotateVector( idVec3 &vec, idVec3 &ang );
 	void						Event_OnSignal( int signal, idEntity *ent, const char *func );
 	void						Event_ClearSignalThread( int signal, idEntity *ent );
 	void						Event_SetCamera( idEntity *ent );
@@ -225,7 +230,7 @@ public:
 	static void					Restart( void );
 	static void					ObjectMoveDone( int threadnum, idEntity *obj );
 
-	static idList<idThread*>&	GetThreads ( void );
+	static idList<idThread*>	&GetThreads ( void );
 
 	bool						IsDoneProcessing ( void );
 	bool						IsDying			 ( void );
@@ -252,8 +257,8 @@ public:
 	void						SetThreadName( const char *name );
 	const char					*GetThreadName( void );
 
-	void						Error( const char *fmt, ... ) const id_attribute((format(printf,2,3)));
-	void						Warning( const char *fmt, ... ) const id_attribute((format(printf,2,3)));
+	void						Error( const char *fmt, ... ) const id_attribute( ( format( printf, 2 , 3 ) ) );
+	void						Warning( const char *fmt, ... ) const id_attribute( ( format( printf, 2, 3 ) ) );
 
 	static idThread				*CurrentThread( void );
 	static int					CurrentThreadNum( void );

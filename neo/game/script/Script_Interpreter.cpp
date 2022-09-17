@@ -27,13 +27,13 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 #include "sys/platform.h"
+#include "framework/FileSystem.h"
+
 #include "gamesys/SysCvar.h"
 #include "script/Script_Compiler.h"
 #include "script/Script_Thread.h"
 
 #include "script/Script_Interpreter.h"
-
-#include "framework/FileSystem.h"
 
 // HvG: Debugger support
 extern bool updateGameDebugger( idInterpreter *interpreter, idProgram *program, int instructionPointer );
@@ -61,7 +61,7 @@ void idInterpreter::Save( idSaveGame *savefile ) const {
 	int i;
 
 	savefile->WriteInt( callStackDepth );
-	for( i = 0; i < callStackDepth; i++ ) {
+	for ( i = 0; i < callStackDepth; i++ ) {
 		savefile->WriteInt( callStack[i].s );
 		if ( callStack[i].f ) {
 			savefile->WriteInt( gameLocal.program.GetFunctionIndex( callStack[i].f ) );
@@ -113,7 +113,7 @@ void idInterpreter::Restore( idRestoreGame *savefile ) {
 	int func_index;
 
 	savefile->ReadInt( callStackDepth );
-	for( i = 0; i < callStackDepth; i++ ) {
+	for ( i = 0; i < callStackDepth; i++ ) {
 		savefile->ReadInt( callStack[i].s );
 
 		savefile->ReadInt( func_index );
@@ -148,8 +148,8 @@ void idInterpreter::Restore( idRestoreGame *savefile ) {
 		multiFrameEvent = idEventDef::FindEvent( funcname );
 	}
 
-	savefile->ReadObject( reinterpret_cast<idClass *&>( eventEntity ) );
-	savefile->ReadObject( reinterpret_cast<idClass *&>( thread ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( eventEntity ) );
+	savefile->ReadObject( reinterpret_cast<idClass*&>( thread ) );
 
 	savefile->ReadBool( doneProcessing );
 	savefile->ReadBool( threadDying );
@@ -177,7 +177,7 @@ void idInterpreter::Reset( void ) {
 	currentFunction = 0;
 	NextInstruction( 0 );
 
-	threadDying	=	false;
+	threadDying		= false;
 	doneProcessing	= true;
 }
 
@@ -185,9 +185,8 @@ void idInterpreter::Reset( void ) {
 ================
 idInterpreter::GetRegisterValue
 
-Returns a string representation of the value of the register.  This is
+Returns a string representation of the value of the register. This is
 used primarily for the debugger and debugging
-
 ================
 */
 bool idInterpreter::GetRegisterValue( const char *name, idStr &out, int scopeDepth ) {
@@ -218,47 +217,44 @@ bool idInterpreter::GetRegisterValue( const char *name, idStr &out, int scopeDep
 	idStr::Copynz( funcObject, func->Name(), sizeof( funcObject ) );
 	funcName = strstr( funcObject, "::" );
 	if ( funcName ) {
+
 		*funcName = '\0';
 		scopeObj = gameLocal.program.GetDef( NULL, funcObject, &def_namespace );
-		funcName += 2;				
-		if ( scopeObj )
-		{
+		funcName += 2;
+		if ( scopeObj ) {
 			scope = gameLocal.program.GetDef( NULL, funcName, scopeObj );
 		}
+
 	} else {
+
 		funcName = funcObject;
 		scope = gameLocal.program.GetDef( NULL, func->Name(), &def_namespace );
 		scopeObj = NULL;
 	}
 
-	if ( !scope )
-	{
+	if ( !scope ) {
 		return false;
 	}
 
 	d = gameLocal.program.GetDef( NULL, name, scope );
 	
 	// Check the objects for it if it wasnt local to the function
-	if ( !d )
-	{
-		for ( ; scopeObj && scopeObj->TypeDef()->SuperClass(); scopeObj = scopeObj->TypeDef()->SuperClass()->def )
-		{
+	if ( !d ) {
+		for ( ; scopeObj && scopeObj->TypeDef()->SuperClass(); scopeObj = scopeObj->TypeDef()->SuperClass()->def ) {
 			d = gameLocal.program.GetDef( NULL, name, scopeObj );
-			if ( d )
-			{
+			if ( d ) {
 				break;
 			}
 		}
 	}	
 
-	if ( !d )
-	{
+	if ( !d ) {
 		out = "???";
 		return false;
 	}
 	
 	reg = GetVariable( d );
-	switch( d->Type() ) {
+	switch ( d->Type() ) {
 	case ev_float:
 		if ( reg.floatPtr ) {
 			out = va("%g", *reg.floatPtr );
@@ -288,8 +284,8 @@ bool idInterpreter::GetRegisterValue( const char *name, idStr &out, int scopeDep
 
 	case ev_field:
 	{
-		idEntity*		entity;			
-		idScriptObject*	obj;
+		idEntity		*entity;			
+		idScriptObject	*obj;
 		
 		if ( scope == &def_namespace ) {
 			// should never happen, but handle it safely anyway
@@ -298,8 +294,7 @@ bool idInterpreter::GetRegisterValue( const char *name, idStr &out, int scopeDep
 
 		field  = d->TypeDef()->FieldType();
 		entity = GetEntity ( *((int*)&localstack[ localstackBase ]) );
-		if ( !entity || !field )
-		{
+		if ( !entity || !field ) {
 			return false;
 		}
 
@@ -310,11 +305,11 @@ bool idInterpreter::GetRegisterValue( const char *name, idStr &out, int scopeDep
 		
 		switch ( field->Type() ) {
 			case ev_boolean:
-				out = va( "%d", *( reinterpret_cast<int *>( &obj->data[ reg.ptrOffset ] ) ) );
+				out = va( "%d", *( reinterpret_cast<int*>( &obj->data[ reg.ptrOffset ] ) ) );
 				return true;
 
 			case ev_float:
-				out = va( "%g", *( reinterpret_cast<float *>( &obj->data[ reg.ptrOffset ] ) ) );
+				out = va( "%g", *( reinterpret_cast<float*>( &obj->data[ reg.ptrOffset ] ) ) );
 				return true;
 				
 			case ev_string:	{
@@ -333,7 +328,7 @@ bool idInterpreter::GetRegisterValue( const char *name, idStr &out, int scopeDep
 			default:
 				return false;
 		}
-		
+
 		break;
 	}
 
@@ -351,7 +346,6 @@ bool idInterpreter::GetRegisterValue( const char *name, idStr &out, int scopeDep
 		return false;
 	}
 }
-
 /*
 ================
 idInterpreter::GetCallstackDepth
@@ -387,7 +381,6 @@ idInterpreter::GetThread
 idThread *idInterpreter::GetThread( void ) const {
 	return thread;
 }
-
 
 /*
 ================
@@ -448,7 +441,7 @@ void idInterpreter::StackTrace( void ) const {
 		gameLocal.Printf( "%12s : %s\n", gameLocal.program.GetFilename( currentFunction->filenum ), currentFunction->Name() );
 	}
 
-	for( i = top; i >= 0; i-- ) {
+	for ( i = top; i >= 0; i-- ) {
 		f = callStack[ i ].f;
 		if ( !f ) {
 			gameLocal.Printf( "<NO FUNCTION>\n" );
@@ -528,7 +521,7 @@ void idInterpreter::DisplayInfo( void ) const {
 			gameLocal.Printf( "%12s : %s\n", gameLocal.program.GetFilename( currentFunction->filenum ), currentFunction->Name() );
 		}
 
-		for( i = callStackDepth; i > 0; i-- ) {
+		for ( i = callStackDepth; i > 0; i-- ) {
 			gameLocal.Printf( "              " );
 			f = callStack[ i ].f;
 			if ( !f ) {
@@ -549,6 +542,10 @@ Copys the args from the calling thread's stack
 */
 void idInterpreter::ThreadCall( idInterpreter *source, const function_t *func, int args ) {
 	Reset();
+
+	if ( args > LOCALSTACK_SIZE ) {
+		args = LOCALSTACK_SIZE;
+	}
 
 	memcpy( localstack, &source->localstack[ source->localstackUsed - args ], args );
 
@@ -618,8 +615,9 @@ void idInterpreter::EnterFunction( const function_t *func, bool clearStack ) {
 		maxStackDepth = callStackDepth;
 	}
 
-	if ( !func ) {
+	if ( func == NULL ) {
 		Error( "NULL function" );
+		return;
 	}
 
 	if ( debug ) {
@@ -670,7 +668,7 @@ void idInterpreter::LeaveFunction( idVarDef *returnDef ) {
 
 	// return value
 	if ( returnDef ) {
-		switch( returnDef->Type() ) {
+		switch ( returnDef->Type() ) {
 		case ev_string :
 			gameLocal.program.ReturnString( GetString( returnDef ) );
 			break;
@@ -730,24 +728,25 @@ void idInterpreter::CallEvent( const function_t *func, int argsize ) {
 	const idEventDef	*evdef;
 	const char			*format;
 
-	if ( !func ) {
+	if ( func == NULL ) {
 		Error( "NULL function" );
+		return;
 	}
 
 	assert( func->eventdef );
 	evdef = func->eventdef;
 
 	start = localstackUsed - argsize;
-	var.intPtr = ( int * )&localstack[ start ];
+	var.intPtr = ( int* )&localstack[ start ];
 	eventEntity = GetEntity( *var.entityNumberPtr );
 
-	if ( !eventEntity || !eventEntity->RespondsTo( *evdef ) ) {
-		if ( eventEntity && developer.GetBool() ) {
+	if ( eventEntity == NULL || !eventEntity->RespondsTo( *evdef ) ) {
+		if ( eventEntity != NULL && developer.GetBool() ) {
 			// give a warning in developer mode
 			Warning( "Function '%s' not supported on entity '%s'", evdef->GetName(), eventEntity->name.c_str() );
 		}
 		// always return a safe value when an object doesn't exist
-		switch( evdef->GetReturnType() ) {
+		switch ( evdef->GetReturnType() ) {
 		case D_EVENT_INTEGER :
 			gameLocal.program.ReturnInteger( 0 );
 			break;
@@ -766,7 +765,7 @@ void idInterpreter::CallEvent( const function_t *func, int argsize ) {
 
 		case D_EVENT_ENTITY :
 		case D_EVENT_ENTITY_NULL :
-			gameLocal.program.ReturnEntity( ( idEntity * )NULL );
+			gameLocal.program.ReturnEntity( ( idEntity* )NULL );
 			break;
 
 		case D_EVENT_TRACE :
@@ -781,31 +780,31 @@ void idInterpreter::CallEvent( const function_t *func, int argsize ) {
 	}
 
 	format = evdef->GetArgFormat();
-	for( j = 0, i = 0, pos = type_object.Size(); ( pos < argsize ) || ( format[ i ] != 0 ); i++ ) {
-		switch( format[ i ] ) {
+	for ( j = 0, i = 0, pos = type_object.Size(); ( pos < argsize ) || ( format[ i ] != 0 ); i++ ) {
+		switch ( format[ i ] ) {
 		case D_EVENT_INTEGER :
-			var.intPtr = ( int * )&localstack[ start + pos ];
-			( *( int * )&data[ i ] ) = int( *var.floatPtr );
+			var.intPtr = ( int* )&localstack[ start + pos ];
+			( *( int* )&data[ i ] ) = int( *var.floatPtr );
 			break;
 
 		case D_EVENT_FLOAT :
-			var.intPtr = ( int * )&localstack[ start + pos ];
-			( *( float * )&data[ i ] ) = *var.floatPtr;
+			var.intPtr = ( int* )&localstack[ start + pos ];
+			( *( float* )&data[ i ] ) = *var.floatPtr;
 			break;
 
 		case D_EVENT_VECTOR :
-			var.intPtr = ( int * )&localstack[ start + pos ];
-			( *( idVec3 ** )&data[ i ] ) = var.vectorPtr;
+			var.intPtr = ( int* )&localstack[ start + pos ];
+			( *( idVec3** )&data[ i ] ) = var.vectorPtr;
 			break;
 
 		case D_EVENT_STRING :
-			( *( const char ** )&data[ i ] ) = ( char * )&localstack[ start + pos ];
+			( *( const char** )&data[ i ] ) = ( char* )&localstack[ start + pos ];
 			break;
 
 		case D_EVENT_ENTITY :
-			var.intPtr = ( int * )&localstack[ start + pos ];
-			( *( idEntity ** )&data[ i ] ) = GetEntity( *var.entityNumberPtr );
-			if ( !( *( idEntity ** )&data[ i ] ) ) {
+			var.intPtr = ( int* )&localstack[ start + pos ];
+			( *( idEntity** )&data[ i ] ) = GetEntity( *var.entityNumberPtr );
+			if ( !( *( idEntity** )&data[ i ] ) ) {
 				Warning( "Entity not found for event '%s'. Terminating thread.", evdef->GetName() );
 				threadDying = true;
 				PopParms( argsize );
@@ -814,8 +813,8 @@ void idInterpreter::CallEvent( const function_t *func, int argsize ) {
 			break;
 
 		case D_EVENT_ENTITY_NULL :
-			var.intPtr = ( int * )&localstack[ start + pos ];
-			( *( idEntity ** )&data[ i ] ) = GetEntity( *var.entityNumberPtr );
+			var.intPtr = ( int* )&localstack[ start + pos ];
+			( *( idEntity** )&data[ i ] ) = GetEntity( *var.entityNumberPtr );
 			break;
 
 		case D_EVENT_TRACE :
@@ -901,8 +900,9 @@ void idInterpreter::CallSysEvent( const function_t *func, int argsize ) {
 	const idEventDef	*evdef;
 	const char			*format;
 
-	if ( !func ) {
+	if ( func == NULL ) {
 		Error( "NULL function" );
+		return;
 	}
 
 	assert( func->eventdef );
@@ -911,31 +911,32 @@ void idInterpreter::CallSysEvent( const function_t *func, int argsize ) {
 	start = localstackUsed - argsize;
 
 	format = evdef->GetArgFormat();
-	for( j = 0, i = 0, pos = 0; ( pos < argsize ) || ( format[ i ] != 0 ); i++ ) {
-		switch( format[ i ] ) {
+	for ( j = 0, i = 0, pos = 0; ( pos < argsize ) || ( format[ i ] != 0 ); i++ ) {
+
+		switch ( format[ i ] ) {
 		case D_EVENT_INTEGER :
-			source.intPtr = ( int * )&localstack[ start + pos ];
-			*( int * )&data[ i ] = int( *source.floatPtr );
+			source.intPtr = ( int* )&localstack[ start + pos ];
+			*( int* )&data[ i ] = int( *source.floatPtr );
 			break;
 
 		case D_EVENT_FLOAT :
-			source.intPtr = ( int * )&localstack[ start + pos ];
-			*( float * )&data[ i ] = *source.floatPtr;
+			source.intPtr = ( int* )&localstack[ start + pos ];
+			*( float* )&data[ i ] = *source.floatPtr;
 			break;
 
 		case D_EVENT_VECTOR :
-			source.intPtr = ( int * )&localstack[ start + pos ];
-			*( idVec3 ** )&data[ i ] = source.vectorPtr;
+			source.intPtr = ( int* )&localstack[ start + pos ];
+			*( idVec3** )&data[ i ] = source.vectorPtr;
 			break;
 
 		case D_EVENT_STRING :
-			*( const char ** )&data[ i ] = ( char * )&localstack[ start + pos ];
+			*( const char** )&data[ i ] = ( char* )&localstack[ start + pos ];
 			break;
 
 		case D_EVENT_ENTITY :
-			source.intPtr = ( int * )&localstack[ start + pos ];
-			*( idEntity ** )&data[ i ] = GetEntity( *source.entityNumberPtr );
-			if ( !*( idEntity ** )&data[ i ] ) {
+			source.intPtr = ( int* )&localstack[ start + pos ];
+			*( idEntity** )&data[ i ] = GetEntity( *source.entityNumberPtr );
+			if ( !*( idEntity** )&data[ i ] ) {
 				Warning( "Entity not found for event '%s'. Terminating thread.", evdef->GetName() );
 				threadDying = true;
 				PopParms( argsize );
@@ -944,8 +945,8 @@ void idInterpreter::CallSysEvent( const function_t *func, int argsize ) {
 			break;
 
 		case D_EVENT_ENTITY_NULL :
-			source.intPtr = ( int * )&localstack[ start + pos ];
-			*( idEntity ** )&data[ i ] = GetEntity( *source.entityNumberPtr );
+			source.intPtr = ( int* )&localstack[ start + pos ];
+			*( idEntity** )&data[ i ] = GetEntity( *source.entityNumberPtr );
 			break;
 
 		case D_EVENT_TRACE :
@@ -997,7 +998,7 @@ bool idInterpreter::Execute( void ) {
 	runaway = 5000000;
 
 	doneProcessing = false;
-	while( !doneProcessing && !threadDying ) {
+	while ( !doneProcessing && !threadDying ) {
 		instructionPointer++;
 
 		if ( !--runaway ) {
@@ -1007,20 +1008,18 @@ bool idInterpreter::Execute( void ) {
 		// next statement
 		st = &gameLocal.program.GetStatement( instructionPointer );
 
-		if ( !updateGameDebugger( this, &gameLocal.program, instructionPointer )
-			&& g_debugScript.GetBool( ) ) 
+		if ( !updateGameDebugger( this, &gameLocal.program, instructionPointer ) && g_debugScript.GetBool( ) ) 
 		{
 			static int lastLineNumber = -1;
-			if ( lastLineNumber != gameLocal.program.GetStatement ( instructionPointer ).linenumber ) {				
-				gameLocal.Printf ( "%s (%d)\n", 
-					gameLocal.program.GetFilename ( gameLocal.program.GetStatement ( instructionPointer ).file ),
-					gameLocal.program.GetStatement ( instructionPointer ).linenumber
-					);
-				lastLineNumber = gameLocal.program.GetStatement ( instructionPointer ).linenumber;
+			if ( lastLineNumber != gameLocal.program.GetStatement( instructionPointer ).linenumber ) {
+				gameLocal.Printf( "%s (%d)\n",
+					gameLocal.program.GetFilename( gameLocal.program.GetStatement( instructionPointer ).file ),
+					gameLocal.program.GetStatement( instructionPointer ).linenumber );
+				lastLineNumber = gameLocal.program.GetStatement( instructionPointer ).linenumber;
 			}
 		}
 
-		switch( st->op ) {
+		switch ( st->op ) {
 		case OP_RETURN:
 			LeaveFunction( st->a );
 			break;
@@ -1555,7 +1554,7 @@ bool idInterpreter::Execute( void ) {
 			if ( !obj ) {
 				*var_b.entityNumberPtr = 0;
 			} else if ( !obj->GetTypeDef()->Inherits( st->b->TypeDef() ) ) {
-				//Warning( "object '%s' cannot be converted to '%s'", obj->GetTypeName(), st->b->TypeDef()->Name() );
+				// Warning( "object '%s' cannot be converted to '%s'", obj->GetTypeName(), st->b->TypeDef()->Name() );
 				*var_b.entityNumberPtr = 0;
 			} else {
 				*var_b.entityNumberPtr = *var_a.entityNumberPtr;
@@ -1828,7 +1827,7 @@ bool idInterpreter::Execute( void ) {
 		case OP_PUSH_BTOF:
 			var_a = GetVariable( st->a );
 			floatVal = *var_a.intPtr;
-			Push( *reinterpret_cast<int *>( &floatVal ) );
+			Push( *reinterpret_cast<int*>( &floatVal ) );
 			break;
 
 		case OP_PUSH_FTOB:
@@ -1885,97 +1884,120 @@ bool idInterpreter::Execute( void ) {
 	return threadDying;
 }
 
-bool idGameEditExt::CheckForBreakPointHit(const idInterpreter* interpreter, const function_t* function1, const function_t* function2, int depth) const
-{
-	return ( ( interpreter->GetCurrentFunction ( ) == function1 ||
-			   interpreter->GetCurrentFunction ( ) == function2)&&
-			 ( interpreter->GetCallstackDepth ( )  <= depth) );
+/*
+====================
+idGameEditExt::CheckForBreakPointHit
+====================
+*/
+bool idGameEditExt::CheckForBreakPointHit( const idInterpreter *interpreter, const function_t *function1, const function_t *function2, int depth) const {
+	return ( ( interpreter->GetCurrentFunction() == function1 ||
+			   interpreter->GetCurrentFunction() == function2 ) && ( interpreter->GetCallstackDepth() <= depth ) );
 }
 
-bool idGameEditExt::ReturnedFromFunction(const idProgram* program, const idInterpreter* interpreter, int index) const
-{
-
-	return ( const_cast<idProgram*>(program)->GetStatement(index).op == OP_RETURN && interpreter->GetCallstackDepth ( ) <= 1 );
+/*
+====================
+idGameEditExt::ReturnedFromFunction
+====================
+*/
+bool idGameEditExt::ReturnedFromFunction( const idProgram *program, const idInterpreter *interpreter, int index) const {
+	return ( const_cast<idProgram*>( program )->GetStatement( index ).op == OP_RETURN && interpreter->GetCallstackDepth() <= 1 );
 }
 
-bool idGameEditExt::GetRegisterValue(const idInterpreter* interpreter, const char* name, idStr& out, int scopeDepth) const
-{
-	return const_cast<idInterpreter*>(interpreter)->GetRegisterValue(name, out, scopeDepth);
+/*
+====================
+idGameEditExt::GetRegisterValue
+====================
+*/
+bool idGameEditExt::GetRegisterValue( const idInterpreter *interpreter, const char *name, idStr &out, int scopeDepth ) const {
+	return const_cast<idInterpreter*>( interpreter )->GetRegisterValue( name, out, scopeDepth );
 }
 
-const idThread*idGameEditExt::GetThread(const idInterpreter* interpreter) const
-{
+/*
+====================
+idGameEditExt::GetThread
+====================
+*/
+const idThread* idGameEditExt::GetThread( const idInterpreter *interpreter) const {
 	return interpreter->GetThread();
 }
 
-void idGameEditExt::MSG_WriteCallstackFunc(idBitMsg* msg, const prstack_t* stack, const idProgram * program, int instructionPtr)
-{
-	const statement_t*	st;
-	const function_t*	func;
+/*
+====================
+idGameEditExt::MSG_WriteCallstackFunc
+====================
+*/
+void idGameEditExt::MSG_WriteCallstackFunc( idBitMsg *msg, const prstack_t *stack, const idProgram *program, int instructionPtr ) {
+	const statement_t	*st;
+	const function_t	*func;
 
-	func  = stack->f;
+	func = stack->f;
 
 	// If the function is unknown then just fill in with default data.
-	if ( !func )
-	{
-		msg->WriteString ( "<UNKNOWN>" );
-		msg->WriteString ( "<UNKNOWN>" );
-		msg->WriteInt ( 0 );
+	if ( !func ) {
+		msg->WriteString( "<UNKNOWN>" );
+		msg->WriteString( "<UNKNOWN>" );
+		msg->WriteInt( 0 );
 		return;
-	}
-	else
-	{
-		msg->WriteString ( va("%s(  )", func->Name() ) );
+	} else {
+		msg->WriteString( va( "%s(  )", func->Name() ) );
 	}
 
-	if (stack->s == -1) //this is a fake stack created by debugger, use intruction pointer for retrieval.
+	if ( stack->s == -1 ) // this is a fake stack created by debugger, use intruction pointer for retrieval.
 		st = &const_cast<idProgram*>( program )->GetStatement( instructionPtr );
 	else // Use the calling statement as the filename and linenumber where the call was made from		
-		st = &const_cast<idProgram*>( program )->GetStatement ( stack->s );
+		st = &const_cast<idProgram*>( program )->GetStatement( stack->s );
 
-	if ( st )
-	{
+	if ( st ) {
 		idStr qpath = const_cast<idProgram*>( program )->GetFilename( st->file );
-		if (idStr::FindChar( qpath, ':' ) != -1)
-			qpath = fileSystem->OSPathToRelativePath( qpath.c_str() );
-		qpath.BackSlashesToSlashes ( );
+
+		if ( idStr::FindChar( qpath, ':' ) != -1 )
+		qpath = fileSystem->OSPathToRelativePath( qpath.c_str() );
+		qpath.BackSlashesToSlashes();
 		msg->WriteString( qpath );
 		msg->WriteInt( st->linenumber );
-	}
-	else 
-	{
-		msg->WriteString ( "<UNKNOWN>" );
-		msg->WriteInt ( 0 );
+	} else {
+		msg->WriteString( "<UNKNOWN>" );
+		msg->WriteInt( 0 );
 	}
 }
 
-void idGameEditExt::MSG_WriteInterpreterInfo(idBitMsg* msg, const idInterpreter* interpreter, const idProgram* program, int instructionPtr)
-{
+/*
+====================
+idGameEditExt::MSG_WriteInterpreterInfo
+====================
+*/
+void idGameEditExt::MSG_WriteInterpreterInfo( idBitMsg *msg, const idInterpreter *interpreter, const idProgram *program, int instructionPtr ) {
 	int			i;
 	prstack_s	temp;
 
-	msg->WriteShort((int)interpreter->GetCallstackDepth( ) );
+	msg->WriteShort( ( int )interpreter->GetCallstackDepth() );
 
 	// write out the current function
-	temp.f = interpreter->GetCurrentFunction( );
+	temp.f = interpreter->GetCurrentFunction();
 	temp.s = -1;
 	temp.stackbase = 0;
-	MSG_WriteCallstackFunc( msg, &temp, program, instructionPtr);
+	MSG_WriteCallstackFunc( msg, &temp, program, instructionPtr );
 
 	// Run through all of the callstack and write each to the msg
-	for (i = interpreter->GetCallstackDepth() - 1; i > 0; i--)
-	{
-		MSG_WriteCallstackFunc( msg, interpreter->GetCallstack( ) + i, program, instructionPtr);
+	for ( i = interpreter->GetCallstackDepth() - 1; i > 0; i-- ) {
+		MSG_WriteCallstackFunc( msg, interpreter->GetCallstack() + i, program, instructionPtr );
 	}
 }
 
-
-int idGameEditExt::GetInterpreterCallStackDepth(const idInterpreter* interpreter)
-{
+/*
+====================
+idGameEditExt::GetInterpreterCallStackDepth
+====================
+*/
+int idGameEditExt::GetInterpreterCallStackDepth( const idInterpreter *interpreter ) {
 	return interpreter->GetCallstackDepth();
 }
 
-const function_t*idGameEditExt::GetInterpreterCallStackFunction( const idInterpreter* interpreter, int stackDepth/* = -1*/)
-{
-	return interpreter->GetCallstack( )[ stackDepth > -1 ? stackDepth :interpreter->GetCallstackDepth( ) ].f;
+/*
+====================
+idGameEditExt::GetInterpreterCallStackFunction
+====================
+*/
+const function_t *idGameEditExt::GetInterpreterCallStackFunction( const idInterpreter *interpreter, int stackDepth /* = -1*/ ) {
+	return interpreter->GetCallstack()[stackDepth > -1 ? stackDepth : interpreter->GetCallstackDepth()].f;
 }

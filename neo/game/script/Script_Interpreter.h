@@ -35,8 +35,8 @@ If you have questions concerning this license or the applicable additional terms
 
 class idThread;
 
-#define MAX_STACK_DEPTH	64
-#define LOCALSTACK_SIZE 	(6144 * 2)
+#define MAX_STACK_DEPTH		64
+#define LOCALSTACK_SIZE 	( 6144 * 2 )
 
 typedef struct prstack_s {
 	int					s;
@@ -100,8 +100,8 @@ public:
 	int					CurrentLine( void ) const;
 	const char			*CurrentFile( void ) const;
 
-	void				Error( const char *fmt, ... ) const id_attribute((format(printf,2,3)));
-	void				Warning( const char *fmt, ... ) const id_attribute((format(printf,2,3)));
+	void				Error( const char *fmt, ... ) const id_attribute( ( format( printf, 2, 3 ) ) );
+	void				Warning( const char *fmt, ... ) const id_attribute( ( format( printf, 2, 3 ) ) );
 	void				DisplayInfo( void ) const;
 
 	bool				BeginMultiFrameEvent( idEntity *ent, const idEventDef *event );
@@ -146,7 +146,7 @@ ID_INLINE void idInterpreter::Push( intptr_t value ) {
 	if ( localstackUsed + sizeof( intptr_t ) > LOCALSTACK_SIZE ) {
 		Error( "Push: locals stack overflow\n" );
 	}
-	*( intptr_t * )&localstack[ localstackUsed ]	= value;
+	*( intptr_t* )&localstack[ localstackUsed ]	= value;
 	localstackUsed += sizeof( intptr_t );
 }
 
@@ -159,7 +159,7 @@ ID_INLINE void idInterpreter::PushVector( const idVec3 &vector ) {
 	if ( localstackUsed + E_EVENT_SIZEOF_VEC > LOCALSTACK_SIZE ) {
 		Error( "Push: locals stack overflow\n" );
 	}
-	*( idVec3 * )&localstack[ localstackUsed ] = vector;
+	*( idVec3* )&localstack[ localstackUsed ] = vector;
 	localstackUsed += E_EVENT_SIZEOF_VEC;
 }
 
@@ -172,7 +172,7 @@ ID_INLINE void idInterpreter::PushString( const char *string ) {
 	if ( localstackUsed + MAX_STRING_LEN > LOCALSTACK_SIZE ) {
 		Error( "PushString: locals stack overflow\n" );
 	}
-	idStr::Copynz( ( char * )&localstack[ localstackUsed ], string, MAX_STRING_LEN );
+	idStr::Copynz( ( char* )&localstack[ localstackUsed ], string, MAX_STRING_LEN );
 	localstackUsed += MAX_STRING_LEN;
 }
 
@@ -199,7 +199,7 @@ idInterpreter::AppendString
 */
 ID_INLINE void idInterpreter::AppendString( idVarDef *def, const char *from ) {
 	if ( def->initialized == idVarDef::stackVariable ) {
-		idStr::Append( ( char * )&localstack[ localstackBase + def->value.stackOffset ], MAX_STRING_LEN, from );
+		idStr::Append( ( char* )&localstack[ localstackBase + def->value.stackOffset ], MAX_STRING_LEN, from );
 	} else {
 		idStr::Append( def->value.stringPtr, MAX_STRING_LEN, from );
 	}
@@ -212,7 +212,7 @@ idInterpreter::SetString
 */
 ID_INLINE void idInterpreter::SetString( idVarDef *def, const char *from ) {
 	if ( def->initialized == idVarDef::stackVariable ) {
-		idStr::Copynz( ( char * )&localstack[ localstackBase + def->value.stackOffset ], from, MAX_STRING_LEN );
+		idStr::Copynz( ( char* )&localstack[ localstackBase + def->value.stackOffset ], from, MAX_STRING_LEN );
 	} else {
 		idStr::Copynz( def->value.stringPtr, from, MAX_STRING_LEN );
 	}
@@ -225,7 +225,7 @@ idInterpreter::GetString
 */
 ID_INLINE const char *idInterpreter::GetString( idVarDef *def ) {
 	if ( def->initialized == idVarDef::stackVariable ) {
-		return ( char * )&localstack[ localstackBase + def->value.stackOffset ];
+		return ( char* )&localstack[ localstackBase + def->value.stackOffset ];
 	} else {
 		return def->value.stringPtr;
 	}
@@ -239,7 +239,7 @@ idInterpreter::GetVariable
 ID_INLINE varEval_t idInterpreter::GetVariable( idVarDef *def ) {
 	if ( def->initialized == idVarDef::stackVariable ) {
 		varEval_t val;
-		val.intPtr = ( int * )&localstack[ localstackBase + def->value.stackOffset ];
+		val.intPtr = ( int* )&localstack[ localstackBase + def->value.stackOffset ];
 		return val;
 	} else {
 		return def->value;

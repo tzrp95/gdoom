@@ -42,6 +42,12 @@ If you have questions concerning this license or the applicable additional terms
 #define TOP_PRIORITY		7
 
 bool idCompiler::punctuationValid[ 256 ];
+
+/*
+================
+idCompiler::punctuation
+================
+*/
 const char *idCompiler::punctuation[] = {
 	"+=", "-=", "*=", "/=", "%=", "&=", "|=", "++", "--",
 	"&&", "||", "<=", ">=", "==", "!=", "::", ";",  ",",
@@ -49,6 +55,11 @@ const char *idCompiler::punctuation[] = {
 	"=",  "[",  "]",  ".",  "<",  ">" ,  "&",  "|", ":",  NULL
 };
 
+/*
+================
+idCompiler::opcodes
+================
+*/
 const opcode_t idCompiler::opcodes[] = {
 	{ "<RETURN>", "RETURN", -1, false, &def_void, &def_void, &def_void },
 
@@ -234,7 +245,7 @@ idCompiler::idCompiler() {
 
 	memset( &immediate, 0, sizeof( immediate ) );
 	memset( punctuationValid, 0, sizeof( punctuationValid ) );
-	for( ptr = punctuation; *ptr != NULL; ptr++ ) {
+	for ( ptr = punctuation; *ptr != NULL; ptr++ ) {
 		id = parserPtr->GetPunctuationId( *ptr );
 		if ( ( id >= 0 ) && ( id < 256 ) ) {
 			punctuationValid[ id ] = true;
@@ -388,12 +399,13 @@ idVarDef *idCompiler::FindImmediate( const idTypeDef *type, const eval_t *eval, 
 	etype = type->Type();
 
 	// check for a constant with the same value
-	for( def = gameLocal.program.GetDefList( "<IMMEDIATE>" ); def != NULL; def = def->Next() ) {
+	for ( def = gameLocal.program.GetDefList( "<IMMEDIATE>" ); def != NULL; def = def->Next() ) {
+
 		if ( def->TypeDef() != type ) {
 			continue;
 		}
 
-		switch( etype ) {
+		switch ( etype ) {
 		case ev_field :
 			if ( *def->value.intPtr == eval->_int ) {
 				return def;
@@ -439,8 +451,8 @@ idVarDef *idCompiler::FindImmediate( const idTypeDef *type, const eval_t *eval, 
 
 		case ev_vector :
 			if ( ( def->value.vectorPtr->x == eval->vector[ 0 ] ) &&
-				( def->value.vectorPtr->y == eval->vector[ 1 ] ) &&
-				( def->value.vectorPtr->z == eval->vector[ 2 ] ) ) {
+				 ( def->value.vectorPtr->y == eval->vector[ 1 ] ) &&
+				 ( def->value.vectorPtr->z == eval->vector[ 2 ] ) ) {
 				return def;
 			}
 			break;
@@ -458,7 +470,7 @@ idVarDef *idCompiler::FindImmediate( const idTypeDef *type, const eval_t *eval, 
 ============
 idCompiler::GetImmediate
 
-returns an existing immediate with the same value, or allocates a new one
+Returns an existing immediate with the same value, or allocates a new one
 ============
 */
 idVarDef *idCompiler::GetImmediate( idTypeDef *type, const eval_t *eval, const char *string ) {
@@ -484,7 +496,7 @@ idVarDef *idCompiler::GetImmediate( idTypeDef *type, const eval_t *eval, const c
 ============
 idCompiler::OptimizeOpcode
 
-try to optimize when the operator works on constants only
+Try to optimize when the operator works on constants only
 ============
 */
 idVarDef *idCompiler::OptimizeOpcode( const opcode_t *op, idVarDef *var_a, idVarDef *var_b ) {
@@ -501,7 +513,7 @@ idVarDef *idCompiler::OptimizeOpcode( const opcode_t *op, idVarDef *var_a, idVar
 	idVec3 &vec_c = *reinterpret_cast<idVec3 *>( &c.vector[ 0 ] );
 
 	memset( &c, 0, sizeof( c ) );
-	switch( op - opcodes ) {
+	switch ( op - opcodes ) {
 		case OP_ADD_F:		c._float = *var_a->value.floatPtr + *var_b->value.floatPtr; type = &type_float; break;
 		case OP_ADD_V:		vec_c = *var_a->value.vectorPtr + *var_b->value.vectorPtr; type = &type_vector; break;
 		case OP_SUB_F:		c._float = *var_a->value.floatPtr - *var_b->value.floatPtr; type = &type_float; break;
@@ -638,7 +650,7 @@ bool idCompiler::EmitPush( idVarDef *expression, const idTypeDef *funcArg ) {
 	const opcode_t *out;
 
 	out = NULL;
-	for( op = &opcodes[ OP_PUSH_F ]; op->name && !strcmp( op->name, "<PUSH>" ); op++ ) {
+	for ( op = &opcodes[ OP_PUSH_F ]; op->name && !strcmp( op->name, "<PUSH>" ); op++ ) {
 		if ( ( funcArg->Type() == op->type_a->Type() ) && ( expression->Type() == op->type_b->Type() ) ) {
 			out = op;
 			break;
@@ -675,7 +687,8 @@ void idCompiler::NextToken( void ) {
 	// Save the token's line number and filename since when we emit opcodes the current
 	// token is always the next one to be read
 	currentLineNumber = token.line;
-	currentFileNumber = gameLocal.program.GetFilenum( parserPtr->GetFileName() );
+	const char* currentFileName = parserPtr->GetFileName();
+	currentFileNumber = gameLocal.program.GetFilenum( currentFileName );
 
 	if ( !parserPtr->ReadToken( &token ) ) {
 		eof = true;
@@ -684,7 +697,7 @@ void idCompiler::NextToken( void ) {
 
 	if ( currentFileNumber != gameLocal.program.GetFilenum( parserPtr->GetFileName() ) ) {
 		if ( ( braceDepth > 0 ) && ( token != "}" ) ) {
-			// missing a closing brace.  try to give as much info as possible.
+			// missing a closing brace. try to give as much info as possible.
 			if ( scope->Type() == ev_function ) {
 				Error( "Unexpected end of file inside function '%s'.  Missing closing braces.", scope->Name() );
 			} else if ( scope->Type() == ev_object ) {
@@ -697,7 +710,7 @@ void idCompiler::NextToken( void ) {
 		}
 	}
 
-	switch( token.type ) {
+	switch ( token.type ) {
 	case TT_STRING:
 		// handle quoted strings as a unit
 		immediateType = &type_string;
@@ -708,7 +721,7 @@ void idCompiler::NextToken( void ) {
 		immediateType = &type_vector;
 		idLexer lex( token, token.Length(), parserPtr->GetFileName(), LEXFL_NOERRORS );
 		idToken token2;
-		for( i = 0; i < 3; i++ ) {
+		for ( i = 0; i < 3; i++ ) {
 			if ( !lex.ReadToken( &token2 ) ) {
 				Error( "Couldn't read vector. '%s' is not in the form of 'x y z'", token.c_str() );
 			}
@@ -753,14 +766,14 @@ void idCompiler::NextToken( void ) {
 			return;
 		}
 
-		Error( "Unknown punctuation '%s'", token.c_str() );
+		Error( "Unknown punctuation '%s' on line %i, file '%s'", token.c_str(), currentLineNumber, currentFileName );
 		break;
 
 	case TT_NAME:
 		return;
 
 	default:
-		Error( "Unknown token '%s'", token.c_str() );
+		Error( "Unknown token '%s' on line %i, file '%s'", token.c_str(), currentLineNumber, currentFileName );
 	}
 }
 
@@ -822,7 +835,7 @@ For error recovery, pops out of nested braces
 ============
 */
 void idCompiler::SkipOutOfFunction( void ) {
-	while( braceDepth ) {
+	while ( braceDepth ) {
 		parserPtr->SkipBracedSection( false );
 		braceDepth--;
 	}
@@ -843,7 +856,7 @@ void idCompiler::SkipToSemicolon( void ) {
 		}
 
 		NextToken();
-	} while( !eof );
+	} while ( !eof );
 }
 
 /*
@@ -876,7 +889,7 @@ idTypeDef *idCompiler::CheckType( void ) {
 		type = &type_scriptevent;
 	} else {
 		type = gameLocal.program.FindType( token.c_str() );
-		if ( type && !type->Inherits( &type_object ) ) {
+		if ( type != NULL && !type->Inherits( &type_object ) ) {
 			type = NULL;
 		}
 	}
@@ -971,7 +984,7 @@ idVarDef *idCompiler::EmitFunctionParms( int op, idVarDef *func, int startarg, i
 			}
 
 			arg++;
-		} while( CheckToken( "," ) );
+		} while ( CheckToken( "," ) );
 
 		ExpectToken( ")" );
 	}
@@ -1020,7 +1033,7 @@ idVarDef *idCompiler::EmitFunctionParms( int op, idVarDef *func, int startarg, i
 		gameLocal.program.returnDef->SetTypeDef( returnType );
 		returnDef = gameLocal.program.returnDef;
 
-		switch( returnType->Type() ) {
+		switch ( returnType->Type() ) {
 		case ev_void :
 			resultOp = OP_STORE_F;
 			break;
@@ -1168,9 +1181,11 @@ idVarDef *idCompiler::ParseSysObjectCall( idVarDef *funcDef ) {
 		Error( "'%s' is not a function", funcDef->Name() );
 	}
 
-	if ( !funcDef->value.functionPtr->eventdef ) {
+	if ( funcDef->value.functionPtr->eventdef == NULL ) {
 		Error( "\"%s\" cannot be called with object notation", funcDef->Name() );
 	}
+
+	assert( funcDef->value.functionPtr->eventdef != NULL );	// remove the stupid analyze warning
 
 	if ( !idThread::Type.RespondsTo( *funcDef->value.functionPtr->eventdef ) ) {
 		Error( "\"%s\" is not callable as a 'sys' function", funcDef->Name() );
@@ -1196,7 +1211,7 @@ idVarDef *idCompiler::LookupDef( const char *name, const idVarDef *baseobj ) {
 		const idVarDef *tdef;
 
 		def = NULL;
-		for( tdef = baseobj; tdef != &def_object; tdef = tdef->TypeDef()->SuperClass()->def ) {
+		for ( tdef = baseobj; tdef != &def_object; tdef = tdef->TypeDef()->SuperClass()->def ) {
 			def = gameLocal.program.GetDef( NULL, name, tdef );
 			if ( def ) {
 				break;
@@ -1213,7 +1228,7 @@ idVarDef *idCompiler::LookupDef( const char *name, const idVarDef *baseobj ) {
 
 				field = LookupDef( name, scope->scope->TypeDef()->def );
 				if ( !field ) {
-					Error( "Unknown value \"%s\"", name );
+					Error( "LookupDef():: Unknown value \"%s\"", name );
 				}
 
 				// type check
@@ -1238,7 +1253,7 @@ idVarDef *idCompiler::LookupDef( const char *name, const idVarDef *baseobj ) {
 				}
 
 				op = &opcodes[ OP_INDIRECT_F ];
-				while( ( op->type_a->Type() != ev_object )
+				while ( ( op->type_a->Type() != ev_object )
 					|| ( type_b != op->type_b->Type() ) || ( type_c != op->type_c->Type() ) ) {
 					if ( ( op->priority == FUNCTION_PRIORITY ) && ( op->type_a->Type() == ev_object ) && ( op->type_c->Type() == ev_void ) &&
 						( type_c != op->type_c->Type() ) ) {
@@ -1284,7 +1299,7 @@ idVarDef *idCompiler::ParseValue( void ) {
 		// if an immediate entity ($-prefaced name) then create or lookup a def for it.
 		// when entities are spawned, they'll lookup the def and point it to them.
 		def = gameLocal.program.GetDef( &type_entity, "$" + token, &def_namespace );
-		if ( !def ) {
+		if ( def == NULL ) {
 			def = gameLocal.program.AllocDef( &type_entity, "$" + token, &def_namespace, true );
 		}
 		NextToken();
@@ -1296,24 +1311,28 @@ idVarDef *idCompiler::ParseValue( void ) {
 
 	ParseName( name );
 	def = LookupDef( name, basetype );
-	if ( !def ) {
+	if ( def == NULL ) {
 		if ( basetype ) {
-			Error( "%s is not a member of %s", name.c_str(), basetype->TypeDef()->Name() );
+			Error( "ParseValue():: %s is not a member of %s", name.c_str(), basetype->TypeDef()->Name() );
 		} else {
-			Error( "Unknown value \"%s\"", name.c_str() );
+			Error( "ParseValue():: Unknown value \"%s\"", name.c_str() ); 
 		}
 	// if namespace, then look up the variable in that namespace
 	} else if ( def->Type() == ev_namespace ) {
-		while( def->Type() == ev_namespace ) {
+		while ( def->Type() == ev_namespace ) {
 			ExpectToken( "::" );
 			ParseName( name );
 			namespaceDef = def;
 			def = gameLocal.program.GetDef( NULL, name, namespaceDef );
-			if ( !def ) {
-				Error( "Unknown value \"%s::%s\"", namespaceDef->GlobalName(), name.c_str() );
+			if ( def == NULL ) {
+				if ( namespaceDef != NULL ) {
+					Error( "ParseValue():: Unknown value \"%s::%s\"", namespaceDef->GlobalName(), name.c_str() );
+				} else {
+					Error( "ParseValue():: Unknown value \"%s\"", name.c_str() );
+				}
+				break;
 			}
 		}
-		//def = LookupDef( name, basetype );
 	}
 
 	return def;
@@ -1330,14 +1349,13 @@ idVarDef *idCompiler::GetTerm( void ) {
 
 	if ( !immediateType && CheckToken( "~" ) ) {
 		e = GetExpression( TILDE_PRIORITY );
-		switch( e->Type() ) {
+		switch ( e->Type() ) {
 		case ev_float :
 			op = OP_COMP_F;
 			break;
 
 		default :
 			Error( "type mismatch for ~" );
-
 			// shut up compiler
 			op = OP_COMP_F;
 			break;
@@ -1348,7 +1366,7 @@ idVarDef *idCompiler::GetTerm( void ) {
 
 	if ( !immediateType && CheckToken( "!" ) ) {
 		e = GetExpression( NOT_PRIORITY );
-		switch( e->Type() ) {
+		switch ( e->Type() ) {
 		case ev_boolean :
 			op = OP_NOT_BOOL;
 			break;
@@ -1371,7 +1389,6 @@ idVarDef *idCompiler::GetTerm( void ) {
 
 		case ev_function :
 			Error( "Invalid type for !" );
-
 			// shut up compiler
 			op = OP_NOT_F;
 			break;
@@ -1382,7 +1399,6 @@ idVarDef *idCompiler::GetTerm( void ) {
 
 		default :
 			Error( "type mismatch for !" );
-
 			// shut up compiler
 			op = OP_NOT_F;
 			break;
@@ -1404,7 +1420,7 @@ idVarDef *idCompiler::GetTerm( void ) {
 			return ParseImmediate();
 		} else {
 			e = GetExpression( NOT_PRIORITY );
-			switch( e->Type() ) {
+			switch ( e->Type() ) {
 			case ev_float :
 				op = OP_NEG_F;
 				break;
@@ -1414,7 +1430,6 @@ idVarDef *idCompiler::GetTerm( void ) {
 				break;
 			default :
 				Error( "type mismatch for -" );
-
 				// shut up compiler
 				op = OP_NEG_F;
 				break;
@@ -1486,8 +1501,8 @@ idCompiler::GetExpression
 ==============
 */
 idVarDef *idCompiler::GetExpression( int priority ) {
-	const opcode_t	*op;
-	const opcode_t	*oldop;
+	const opcode_t		*op;
+	const opcode_t		*oldop;
 	idVarDef		*e;
 	idVarDef		*e2;
 	const idVarDef	*oldtype;
@@ -1505,7 +1520,7 @@ idVarDef *idCompiler::GetExpression( int priority ) {
 		return e;
 	}
 
-	while( 1 ) {
+	while ( 1 ) {
 		if ( ( priority == FUNCTION_PRIORITY ) && CheckToken( "(" ) ) {
 			return ParseFunctionCall( e );
 		}
@@ -1515,7 +1530,7 @@ idVarDef *idCompiler::GetExpression( int priority ) {
 			break;
 		}
 
-		for( op = opcodes; op->name; op++ ) {
+		for ( op = opcodes; op->name; op++ ) {
 			if ( ( op->priority == priority ) && CheckToken( op->name ) ) {
 				break;
 			}
@@ -1579,7 +1594,7 @@ idVarDef *idCompiler::GetExpression( int priority ) {
 		}
 
 		oldop = op;
-		while( !TypeMatches( type_a, op->type_a->Type() ) || !TypeMatches( type_b, op->type_b->Type() ) ||
+		while ( !TypeMatches( type_a, op->type_a->Type() ) || !TypeMatches( type_b, op->type_b->Type() ) ||
 			( ( type_c != ev_void ) && !TypeMatches( type_c, op->type_c->Type() ) ) ) {
 			if ( ( op->priority == FUNCTION_PRIORITY ) && TypeMatches( type_a, op->type_a->Type() ) && TypeMatches( type_b, op->type_b->Type() ) ) {
 				break;
@@ -1591,7 +1606,7 @@ idVarDef *idCompiler::GetExpression( int priority ) {
 			}
 		}
 
-		switch( op - opcodes ) {
+		switch ( op - opcodes ) {
 		case OP_SYSCALL :
 			ExpectToken( "(" );
 			e = ParseSysObjectCall( e2 );
@@ -1680,7 +1695,7 @@ void idCompiler::PatchLoop( int start, int continuePos ) {
 	statement_t	*pos;
 
 	pos = &gameLocal.program.GetStatement( start );
-	for( i = start; i < gameLocal.program.NumStatements(); i++, pos++ ) {
+	for ( i = start; i < gameLocal.program.NumStatements(); i++, pos++ ) {
 		if ( pos->op == OP_BREAK ) {
 			pos->op = OP_GOTO;
 			pos->a = JumpFrom( i );
@@ -1722,7 +1737,7 @@ void idCompiler::ParseReturnStatement( void ) {
 		return;
 	}
 
-	for( op = opcodes; op->name; op++ ) {
+	for ( op = opcodes; op->name; op++ ) {
 		if ( !strcmp( op->name, "=" ) ) {
 			break;
 		}
@@ -1730,7 +1745,7 @@ void idCompiler::ParseReturnStatement( void ) {
 
 	assert( op->name );
 
-	while( !TypeMatches( type_a, op->type_a->Type() ) || !TypeMatches( type_b, op->type_b->Type() ) ) {
+	while ( !TypeMatches( type_a, op->type_a->Type() ) || !TypeMatches( type_b, op->type_b->Type() ) ) {
 		op++;
 		if ( !op->name || strcmp( op->name, "=" ) ) {
 			Error( "type mismatch for return value" );
@@ -1840,7 +1855,7 @@ void idCompiler::ParseForStatement( void ) {
 	if ( !CheckToken( ";" ) ) {
 		do {
 			GetExpression( TOP_PRIORITY );
-		} while( CheckToken( "," ) );
+		} while ( CheckToken( "," ) );
 
 		ExpectToken( ";" );
 	}
@@ -1864,7 +1879,7 @@ void idCompiler::ParseForStatement( void ) {
 		patch2 = gameLocal.program.NumStatements();
 		do {
 			GetExpression( TOP_PRIORITY );
-		} while( CheckToken( "," ) );
+		} while ( CheckToken( "," ) );
 
 		ExpectToken( ")" );
 
@@ -2029,7 +2044,7 @@ void idCompiler::ParseObjectDef( const char *objname ) {
 	idTypeDef	*parentType;
 	idTypeDef	*fieldtype;
 	idStr		name;
-	const char  *fieldname;
+	const char	*fieldname;
 	idTypeDef	newtype( ev_field, NULL, "", 0, NULL );
 	idVarDef	*oldscope;
 	int			i;
@@ -2059,7 +2074,7 @@ void idCompiler::ParseObjectDef( const char *objname ) {
 	scope = objtype->def;
 
 	// inherit all the functions
-	for( i = 0; i < parentType->NumFunctions(); i++ ) {
+	for ( i = 0; i < parentType->NumFunctions(); i++ ) {
 		const function_t *func = parentType->GetFunction( i );
 		objtype->AddFunction( func );
 	}
@@ -2090,7 +2105,7 @@ void idCompiler::ParseObjectDef( const char *objname ) {
 			objtype->AddField( type, name );
 			ExpectToken( ";" );
 		}
-	} while( !CheckToken( "}" ) );
+	} while ( !CheckToken( "}" ) );
 
 	scope = oldscope;
 
@@ -2101,7 +2116,7 @@ void idCompiler::ParseObjectDef( const char *objname ) {
 ============
 idCompiler::ParseFunction
 
-parse a function type
+Parse a function type
 ============
 */
 idTypeDef *idCompiler::ParseFunction( idTypeDef *returnType, const char *name ) {
@@ -2119,7 +2134,7 @@ idTypeDef *idCompiler::ParseFunction( idTypeDef *returnType, const char *name ) 
 			type = ParseType();
 			ParseName( parmName );
 			newtype.AddFunctionParm( type, parmName );
-		} while( CheckToken( "," ) );
+		} while ( CheckToken( "," ) );
 
 		ExpectToken( ")" );
 	}
@@ -2179,7 +2194,7 @@ void idCompiler::ParseFunctionDef( idTypeDef *returnType, const char *name ) {
 		// which otherwise causes Assertions in IdInterpreter::Execute() and ::LeaveFunction()
 		// ("st->c->value.argSize == func->parmTotal", "localstackUsed == localstackBase")
 		func->parmTotal = 0;
-		for( i = 0; i < numParms; i++ ) {
+		for ( i = 0; i < numParms; i++ ) {
 			parmType = type->GetParmType( i );
 			int size = parmType->Inherits( &type_object ) ? type_object.Size() : parmType->Size();
 			func->parmTotal += size;
@@ -2195,7 +2210,7 @@ void idCompiler::ParseFunctionDef( idTypeDef *returnType, const char *name ) {
 
 	int totalSize = 0; // DG: totalsize might already have been calculated for the prototype, see a few lines above
 	func->parmSize.SetNum( numParms );
-	for( i = 0; i < numParms; i++ ) {
+	for ( i = 0; i < numParms; i++ ) {
 		parmType = type->GetParmType( i );
 		if ( parmType->Inherits( &type_object ) ) {
 			func->parmSize[ i ] = type_object.Size();
@@ -2209,7 +2224,7 @@ void idCompiler::ParseFunctionDef( idTypeDef *returnType, const char *name ) {
 	func->parmTotal = totalSize;
 
 	// define the parms
-	for( i = 0; i < numParms; i++ ) {
+	for ( i = 0; i < numParms; i++ ) {
 		if ( gameLocal.program.GetDef( type->GetParmType( i ), type->GetParmName( i ), def ) ) {
 			Error( "'%s' defined more than once in function parameters", type->GetParmName( i ) );
 		}
@@ -2227,7 +2242,7 @@ void idCompiler::ParseFunctionDef( idTypeDef *returnType, const char *name ) {
 		function_t *constructorFunc = NULL;
 
 		// find the superclass constructor
-		for( superClass = oldscope->TypeDef()->SuperClass(); superClass != &type_object; superClass = superClass->SuperClass() ) {
+		for ( superClass = oldscope->TypeDef()->SuperClass(); superClass != &type_object; superClass = superClass->SuperClass() ) {
 			constructorFunc = gameLocal.program.FindFunction( va( "%s::init", superClass->Name() ) );
 			if ( constructorFunc ) {
 				break;
@@ -2244,7 +2259,7 @@ void idCompiler::ParseFunctionDef( idTypeDef *returnType, const char *name ) {
 	}
 
 	// parse regular statements
-	while( !CheckToken( "}" ) ) {
+	while ( !CheckToken( "}" ) ) {
 		ParseStatement();
 	}
 
@@ -2254,7 +2269,7 @@ void idCompiler::ParseFunctionDef( idTypeDef *returnType, const char *name ) {
 		function_t *destructorFunc = NULL;
 
 		// find the superclass destructor
-		for( superClass = oldscope->TypeDef()->SuperClass(); superClass != &type_object; superClass = superClass->SuperClass() ) {
+		for ( superClass = oldscope->TypeDef()->SuperClass(); superClass != &type_object; superClass = superClass->SuperClass() ) {
 			destructorFunc = gameLocal.program.FindFunction( va( "%s::destroy", superClass->Name() ) );
 			if ( destructorFunc ) {
 				break;
@@ -2265,7 +2280,7 @@ void idCompiler::ParseFunctionDef( idTypeDef *returnType, const char *name ) {
 			if ( func->firstStatement < gameLocal.program.NumStatements() ) {
 				// change all returns to point to the call to the destructor
 				pos = &gameLocal.program.GetStatement( func->firstStatement );
-				for( i = func->firstStatement; i < gameLocal.program.NumStatements(); i++, pos++ ) {
+				for ( i = func->firstStatement; i < gameLocal.program.NumStatements(); i++, pos++ ) {
 					if ( pos->op == OP_RETURN ) {
 						pos->op = OP_GOTO;
 						pos->a = JumpDef( i, gameLocal.program.NumStatements() );
@@ -2393,7 +2408,7 @@ idCompiler::GetTypeForEventArg
 idTypeDef *idCompiler::GetTypeForEventArg( char argType ) {
 	idTypeDef *type;
 
-	switch( argType ) {
+	switch ( argType ) {
 	case D_EVENT_INTEGER :
 		// this will get converted to int by the interpreter
 		type = &type_float;
@@ -2450,17 +2465,20 @@ void idCompiler::ParseEventDef( idTypeDef *returnType, const char *name ) {
 	idStr			parmName;
 
 	ev = idEventDef::FindEvent( name );
-	if ( !ev ) {
+	if ( ev == NULL ) {
 		Error( "Unknown event '%s'", name );
+		return;
 	}
 
 	// set the return type
 	expectedType = GetTypeForEventArg( ev->GetReturnType() );
-	if ( !expectedType ) {
+	if ( expectedType == NULL ) {
 		Error( "Invalid return type '%c' in definition of '%s' event.", ev->GetReturnType(), name );
+		return;
 	}
 	if ( returnType != expectedType ) {
 		Error( "Return type doesn't match internal return type '%s'", expectedType->Name() );
+		return;
 	}
 
 	idTypeDef newtype( ev_function, NULL, name, type_function.Size(), returnType );
@@ -2469,10 +2487,11 @@ void idCompiler::ParseEventDef( idTypeDef *returnType, const char *name ) {
 
 	format = ev->GetArgFormat();
 	num = strlen( format );
-	for( i = 0; i < num; i++ ) {
+	for ( i = 0; i < num; i++ ) {
 		expectedType = GetTypeForEventArg( format[ i ] );
-		if ( !expectedType || ( expectedType == &type_void ) ) {
+		if ( expectedType == NULL || ( expectedType == &type_void ) ) {
 			Error( "Invalid parameter '%c' in definition of '%s' event.", format[ i ], name );
+			return;
 		}
 
 		argType = ParseType();
@@ -2508,7 +2527,7 @@ void idCompiler::ParseEventDef( idTypeDef *returnType, const char *name ) {
 		function_t &func	= gameLocal.program.AllocFunction( type->def );
 		func.eventdef		= ev;
 		func.parmSize.SetNum( num );
-		for( i = 0; i < num; i++ ) {
+		for ( i = 0; i < num; i++ ) {
 			argType = newtype.GetParmType( i );
 			func.parmTotal		+= argType->Size();
 			func.parmSize[ i ]	= argType->Size();
@@ -2571,7 +2590,7 @@ void idCompiler::ParseDefs( void ) {
 		ParseFunctionDef( type, name.c_str() );
 	} else {
 		ParseVariableDef( type, name.c_str() );
-		while( CheckToken( "," ) ) {
+		while ( CheckToken( "," ) ) {
 			ParseName( name );
 			ParseVariableDef( type, name.c_str() );
 		}
@@ -2594,7 +2613,7 @@ void idCompiler::ParseNamespace( idVarDef *newScope ) {
 		ExpectToken( "{" );
 	}
 
-	while( !eof ) {
+	while ( !eof ) {
 		scope		= newScope;
 		callthread	= false;
 
@@ -2665,7 +2684,7 @@ void idCompiler::CompileFile( const char *text, const char *filename, bool toCon
 	try {
 		// read first token
 		NextToken();
-		while( !eof && !error ) {
+		while ( !eof && !error ) {
 			// parse from global namespace
 			ParseNamespace( &def_namespace );
 		}
