@@ -344,6 +344,10 @@ extern idCVar	r_hdrDebugTextureIndex;
 
 extern idCVar	r_useCAS;
 
+extern idCVar	r_useEdgeAA;
+extern idCVar	r_edgeAASampleScale;
+extern idCVar	r_edgeAAFilterScale;
+
 // -------------------------------------	
 //	Player ability-related CVars
 // -------------------------------------

@@ -408,7 +408,7 @@ idCVar g_gibLifeTime(				"g_gibLifeTime",				"5",					CVAR_GAME | CVAR_FLOAT | C
 //	Renderer/Post Proces related CVars
 // -------------------------------------
 
-idCVar r_useHDR(					"r_useHDR",						"1",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_BOOL, "Enables High Dynamic Range lighting." );
+idCVar r_useHDR(					"r_useHDR",						"1",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_BOOL, "Enables High Dynamic Range lighting" );
 idCVar r_hdrSceneExposure(			"r_hdrSceneExposure",			"1.5",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_FLOAT, "Scene exposure. Try values lower or greater than 1.0." );
 idCVar r_hdrMiddleGray(				"r_hdrMiddleGray",				"0.15",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_FLOAT, "Middle gray value for overall scene. Range 0 - 1. Works only when automatic exposure is on." );
 idCVar r_hdrColorCurveBias(			"r_hdrColorCurveBias",			"0.26",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_FLOAT, "Applies Exponential Color Curve to final pass (range 0 to 1), 1 = color curve fully applied , 0= No color curve" );
@@ -430,11 +430,15 @@ idCVar r_hdrDebugTextureIndex(		"r_hdrDebugTextureIndex",		"0",					CVAR_TOOL | 
 
 idCVar r_useCAS(					"r_useCAS",						"0",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_BOOL, "Enables Contrast Adaptive Sharpening." );
 
-/*
-====================================
-Ability-related CVars
-===================================
-*/
+
+// -------------------------------------	
+//	Player Ability related CVars
+// -------------------------------------
+
+idCVar r_useEdgeAA(					"r_useEdgeAA",					"0",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_INTEGER, "Enable edge anti-aliasing: 1 = RGB edge AA; 2 = FXAA" );
+idCVar r_edgeAASampleScale(			"r_edgeAASampleScale",			"1.0",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_FLOAT, "Set the sample offset scale for edge detection" );
+idCVar r_edgeAAFilterScale(			"r_edgeAAFilterScale",			"1.0",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_FLOAT, "Set the filter offset scale for blurring" );
+
 
 // ability selectors
 idCVar pm_abilityModifierActive(	"pm_ability_active",			"0",					CVAR_GAME | CVAR_ARCHIVE | CVAR_INTEGER, "Changes the active ability modifier\n"
