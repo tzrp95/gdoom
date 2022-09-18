@@ -76,6 +76,7 @@ idPlayerView::idPlayerView() : m_postProcessManager() {
 	bfgMaterial				= declManager->FindMaterial( "textures/decals/bfgvision" );
 
 	casMaterial				= declManager->FindMaterial( "postProcess/cas" );
+	edgeAAMaterial			= declManager->FindMaterial( "postProcess/edgeAA" );
 
 	lagoMaterial = declManager->FindMaterial( LAGO_MATERIAL, false );
 	bfgVision = false;
@@ -723,7 +724,7 @@ void idPlayerView::PlayerViewManager( void ) {
 		BerserkVision();
 	}
 
-	// HDR, Denton's Method
+	// HDR, (Denton's Method)
 	if ( r_useHDR.GetBool() ) {
 		cvarSystem->SetCVarBool( "r_testARBProgram", true );
 		this->m_postProcessManager.Update();
@@ -734,6 +735,12 @@ void idPlayerView::PlayerViewManager( void ) {
 	// Contrast Adaptive Sharpening
 	if ( r_useCAS.GetBool() ) {
 		PostProcess_CAS();
+	}
+
+	// Edge Anti-Aliasing
+	int postAA = r_useEdgeAA.GetInteger();
+	if ( postAA == 1 || postAA == 2 ) {
+		PostProcess_EdgeAA();
 	}
 
 	// test a single material drawn over everything
@@ -2190,4 +2197,15 @@ idPlayerView::PostProcess_CAS
 void idPlayerView::PostProcess_CAS( void ) {
 	renderSystem->CaptureRenderToImage( "_currentRender" );
 	renderSystem->DrawStretchPic( 0.0f, 0.0f, SCREEN_WIDTH, SCREEN_HEIGHT, 0.0f, shiftScale.y, shiftScale.x, 0.0f, casMaterial );
+}
+
+/*
+===================
+idPlayerView::PostProcess_EdgeAA
+===================
+*/
+void idPlayerView::PostProcess_EdgeAA( void ) {
+	renderSystem->CaptureRenderToImage( "_currentRender" );
+	renderSystem->SetColor4( r_edgeAASampleScale.GetFloat(), r_edgeAAFilterScale.GetFloat(), 1.0f, r_useEdgeAA.GetFloat() );
+	renderSystem->DrawStretchPic( 0.0f, 0.0f, SCREEN_WIDTH, SCREEN_HEIGHT, 0.0f, 0.0f, 1.0f, 1.0f, edgeAAMaterial );
 }

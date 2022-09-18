@@ -125,6 +125,7 @@ public:
 
 	void					PlayerViewManager( void );
 	void					PostProcess_CAS( void );
+	void					PostProcess_EdgeAA( void );
 
 private:
 	void					SingleView( idUserInterface *hud, const renderView_t *view );
@@ -147,6 +148,7 @@ public:
 	const idMaterial		*scratchMaterial;		// material to take the double vision screen shot
 
 	const idMaterial		*casMaterial;			// Explosion FX material
+	const idMaterial		*edgeAAMaterial;		// Edge AA material
 
 	int						dvFinishTime;		// double vision will be stopped at this time
 	int						kickFinishTime;		// view kick will be stopped at this time
