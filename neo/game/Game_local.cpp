@@ -2176,7 +2176,7 @@ const char *idGameLocal::GetPlayerDef( void ) const {
 		}
 	}
 
-	return	"player_doommarine";	// will eventually be player_default
+	return	"player_default";
 }
 
 /*

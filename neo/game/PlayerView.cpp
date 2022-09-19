@@ -2206,6 +2206,6 @@ idPlayerView::PostProcess_EdgeAA
 */
 void idPlayerView::PostProcess_EdgeAA( void ) {
 	renderSystem->CaptureRenderToImage( "_currentRender" );
-	renderSystem->SetColor4( r_edgeAASampleScale.GetFloat(), r_edgeAAFilterScale.GetFloat(), 1.0f, r_useEdgeAA.GetFloat() );
+	renderSystem->SetColor4( r_edgeAASampleScale.GetFloat(), r_edgeAAFilterScale.GetFloat(), 1.0f, r_useEdgeAA.GetInteger() );
 	renderSystem->DrawStretchPic( 0.0f, 0.0f, SCREEN_WIDTH, SCREEN_HEIGHT, 0.0f, 0.0f, 1.0f, 1.0f, edgeAAMaterial );
 }

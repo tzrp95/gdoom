@@ -1369,7 +1369,8 @@ idPlayer::idPlayer() {
 	painToleranceScale		= 1.0f;
 
 	nextHealthRegen			= 0;
-	prevHeatlh				= health;
+	nextArmorRegen			= 0;
+	prevHealth				= health;
 }
 
 /*
@@ -1680,7 +1681,8 @@ void idPlayer::Init( void ) {
 	painToleranceScale	= 1.0f;
 
 	nextHealthRegen			= 0;
-	prevHeatlh				= health;
+	nextArmorRegen			= 0;
+	prevHealth				= health;
 }
 
 /*
@@ -1778,7 +1780,7 @@ void idPlayer::Spawn( void ) {
 	playerView.SetPlayerEntity( this );
 
 	// supress model in non-player views, but allow it in mirrors and remote views
-	renderEntity.suppressSurfaceInViewID = entityNumber+1;
+	renderEntity.suppressSurfaceInViewID = entityNumber + 1;
 
 	// don't project shadow on self or weapon
 	renderEntity.noSelfShadow = true;
@@ -2215,7 +2217,8 @@ void idPlayer::Save( idSaveGame *savefile ) const {
 
 	// ability stuff
 	savefile->WriteInt( nextHealthRegen );
-	savefile->WriteInt( prevHeatlh );
+	savefile->WriteInt( nextArmorRegen );
+	savefile->WriteInt( prevHealth );
 }
 
 /*
@@ -2522,8 +2525,10 @@ void idPlayer::Restore( idRestoreGame *savefile ) {
 	savefile->ReadFloat( bloomSpeed );
 	savefile->ReadFloat( bloomIntensity );
 
+	// ability stuff
 	savefile->ReadInt( nextHealthRegen );
-	savefile->ReadInt( prevHeatlh );
+	savefile->ReadInt( nextArmorRegen );
+	savefile->ReadInt( prevHealth );
 
 	// DG: workaround for lingering messages that are shown forever after loading a savegame
 	//     (one way to get them is saving again, while the message from first save is still
@@ -5100,7 +5105,7 @@ bool idPlayer::HandleSingleGuiCommand( idEntity *entityGui, idLexer *src ) {
 				entityGui->GetRenderEntity()->gui[ 0 ]->SetStateInt( "gui_parm1", _health );
 			}
 			health += amt;
-			prevHeatlh = health;	// sikk - Health Management System (Health Regen)
+			prevHealth = health;	// needed for health regen
 			if ( health > 100 ) {
 				health = 100;
 			}
@@ -5937,11 +5942,6 @@ void idPlayer::SetCurrentHeartRate( void ) {
 
 	if ( PowerUpActive( ADRENALINE ) ) {
 		heartRate = 135;
-	}
-	// health regen --->
-	else if ( pm_abilityModifierActive.GetInteger() == 2  && health < pm_healthRegenLimit.GetInteger() && health > 0 ) {
-		heartRate = 130 - health;
-	// <---
 	} else {
 		heartRate = idMath::FtoiFast( heartInfo.GetCurrentValue( gameLocal.time ) );
 		int currentRate = GetBaseHeartRate();
@@ -5974,12 +5974,6 @@ void idPlayer::SetCurrentHeartRate( void ) {
 		pct += ( float )zeroVol;
 
 		if ( pct != zeroVol ) {
-			// health regen
-			if ( pm_abilityModifierActive.GetInteger() == 2 && health < pm_healthRegenLimit.GetInteger() && health > 0 ) {
-				float f = 40 * ( 1.0f - (float)health / pm_healthRegenLimit.GetInteger() ) - 10;
-				if ( pct < f )
-					pct = f;
-			}
 			StartSound( "snd_heartbeat", SND_CHANNEL_HEART, SSF_PRIVATE_SOUND, false, NULL );
 			// modify just this channel to a custom volume
 			soundShaderParms_t	parms;
@@ -7484,7 +7478,7 @@ void idPlayer::Think( void ) {
 
 	UpdateDeathSkin( false );
 
-	if ( !gameLocal.inCinematic || !influenceActive ) {
+	if ( !gameLocal.inCinematic || !influenceActive || !AI_DEAD ) {
 		ManageActiveAbilities();
 	}
 
@@ -10130,6 +10124,13 @@ void idPlayer::ManageActiveAbilities( void ) {
 		RegenerateHealth();
 	}
 
+	// Armor Regeneration
+	if ( pm_abilityModifierActive.GetInteger() == 3 ) {
+		RegenerateArmor();
+	}
+
+	// Air Jumps are handled in Physics_Player.cpp
+
 }
 
 /*
@@ -10153,22 +10154,27 @@ void idPlayer::PainTolerance( void ) {
 /*
 ===============
 idPlayer::RegenerateHealth
+
+ * based off Sikkmod
 ===============
 */
 void idPlayer::RegenerateHealth( void ) {
+	// 'prevHealth' holds player health after Health station has been used
+
+	int maxHealth = inventory.maxHealth;
 
 	if ( gameLocal.time > nextHealthRegen && 
-		 gameLocal.time > ( lastDmgTime + ( pm_healthRegenDelay.GetInteger() * 1000 ) ) && 
-		 health < pm_healthRegenLimit.GetInteger() && 
-		 health < prevHeatlh ) 
+		 gameLocal.time > ( lastDmgTime + ( pm_healthRegenDelay.GetFloat() * 1000 ) ) && 
+		 health < maxHealth && 
+		 health < prevHealth ) 
 	{ 
 		int currentRegenStep = 0;
 
 		if ( pm_healthRegenSteps.GetInteger() > 1 ) {
-			currentRegenStep = pm_healthRegenLimit.GetInteger() / pm_healthRegenSteps.GetInteger();
+			currentRegenStep = maxHealth / pm_healthRegenSteps.GetInteger();
 			for ( int i = 0; i < pm_healthRegenSteps.GetInteger(); i++ )
 				if ( health > currentRegenStep )
-					currentRegenStep += ( pm_healthRegenLimit.GetInteger() / pm_healthRegenSteps.GetInteger() );
+					currentRegenStep += ( maxHealth / pm_healthRegenSteps.GetInteger() );
 		}
 
 		health += pm_healthRegenAmount.GetInteger();
@@ -10176,9 +10182,47 @@ void idPlayer::RegenerateHealth( void ) {
 		if ( pm_healthRegenSteps.GetInteger() > 1 && health > currentRegenStep ) {
 			health = currentRegenStep;
 		}
-		if ( health >= pm_healthRegenLimit.GetInteger() ) {
-			health = pm_healthRegenLimit.GetInteger();
+		if ( health >= maxHealth ) {
+			health = maxHealth;
 		}
 		nextHealthRegen = gameLocal.time + pm_healthRegenTime.GetInteger() * 1000;
+	}
+}
+
+/*
+===============
+idPlayer::RegenerateArmor
+
+ * based off Sikkmod
+===============
+*/
+void idPlayer::RegenerateArmor( void ) {
+	// Maybe add a armor patching sound? either looping or
+	// when armor hits certain values ( 5 / 10 / 15 / 25 )
+
+	int maxArmor = inventory.maxarmor;
+
+	if ( gameLocal.time > nextArmorRegen && 
+		 gameLocal.time > ( lastDmgTime + ( pm_armorRegenDelay.GetFloat() * 1000 ) ) && 
+		 inventory.armor < maxArmor && inventory.armor >= 1 ) 
+	{ 
+		int currentRegenStep = 0;
+
+		if ( pm_armorRegenSteps.GetInteger() > 1 ) {
+			currentRegenStep = maxArmor / pm_armorRegenSteps.GetInteger();
+			for ( int i = 0; i < pm_armorRegenSteps.GetInteger(); i++ )
+				if ( inventory.armor > currentRegenStep )
+					currentRegenStep += ( maxArmor / pm_armorRegenSteps.GetInteger() );
+		}
+
+		inventory.armor += pm_armorRegenAmount.GetInteger();
+
+		if ( pm_armorRegenSteps.GetInteger() > 1 && inventory.armor > currentRegenStep ) {
+			inventory.armor = currentRegenStep;
+		}
+		if ( inventory.armor >= maxArmor ) {
+			inventory.armor = maxArmor;
+		}
+		nextArmorRegen = gameLocal.time + pm_armorRegenTime.GetInteger() * 1000;
 	}
 }

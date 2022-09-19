@@ -605,16 +605,17 @@ public:
 	int						GetProjectileType( void );
 	// <---
 
-
 	// Abilities
 	void					ManageActiveAbilities( void );
 
 	void					PainTolerance( void );
 	void					RegenerateHealth( void );
+	void					RegenerateArmor( void );
 
 	float					painToleranceScale;
 	int						nextHealthRegen;
-	int						prevHeatlh;		// holds player health after Health station has been used
+	int						nextArmorRegen;
+	int						prevHealth;
 
 private:
 	jointHandle_t			hipJoint;
