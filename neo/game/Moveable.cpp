@@ -1180,14 +1180,9 @@ void idExplodingBarrel::Killed( idEntity *inflictor, idEntity *attacker, int dam
 			idEntity *ent;
 			idVec3 dir;
 			idDebris *debris;
-			//if ( first ) {
-				dir = physicsObj.GetAxis()[1];
-			//	first = false;
-			//} else {
-				dir.x += gameLocal.random.CRandomFloat() * 4.0f;
-				dir.y += gameLocal.random.CRandomFloat() * 4.0f;
-				//dir.z = gameLocal.random.RandomFloat() * 8.0f;
-			//}
+			dir = physicsObj.GetAxis()[1];
+			dir.x += gameLocal.random.CRandomFloat() * 4.0f;
+			dir.y += gameLocal.random.CRandomFloat() * 4.0f;
 			dir.Normalize();
 
 			gameLocal.SpawnEntityDef( *debris_args, &ent, false );
@@ -1208,6 +1203,7 @@ void idExplodingBarrel::Killed( idEntity *inflictor, idEntity *attacker, int dam
 
 	physicsObj.SetContents( 0 );	// moved here from above
 	physicsObj.PutToRest();
+
 	CancelEvents( &EV_Explode );
 	CancelEvents( &EV_Activate );
 
@@ -1238,13 +1234,12 @@ void idExplodingBarrel::Damage( idEntity *inflictor, idEntity *attacker, const i
 
 	// DentonMod : Following condition means, if inflictor's got a radius damage then explode immediately, 
 	// which could cause explosions when barrel's health is greater than 0 so I am disabling it.
-
 	/*
 	if ( damageDef->FindKey( "radius" ) && GetPhysics()->GetContents() != 0 && GetBindMaster() == NULL ) {
 		PostEventMS( &EV_Explode, 400 );
 	} else {
 	*/
-		idEntity::Damage( inflictor, attacker, dir, damageDefName, damageScale, location );
+	idEntity::Damage( inflictor, attacker, dir, damageDefName, damageScale, location );
 //	}
 }
 
