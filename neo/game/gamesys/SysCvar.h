@@ -357,11 +357,13 @@ extern idCVar	pm_abilityModifierActive;
 extern idCVar	pm_healthRegenTime;
 extern idCVar	pm_healthRegenDelay;
 extern idCVar	pm_healthRegenAmount;
-extern idCVar	pm_healthRegenLimit;
 extern idCVar	pm_healthRegenSteps;
-extern idCVar	pm_healthRegenStepsHard;
 
-extern idCVar	pm_airJumps;
+extern idCVar	pm_armorRegenTime;
+extern idCVar	pm_armorRegenDelay;
+extern idCVar	pm_armorRegenAmount;
+extern idCVar	pm_armorRegenSteps;
+
 extern idCVar	pm_airJumpVelocity;
 
 extern idCVar	pm_maxDashes;

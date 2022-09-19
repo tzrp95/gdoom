@@ -430,20 +430,18 @@ idCVar r_hdrDebugTextureIndex(		"r_hdrDebugTextureIndex",		"0",					CVAR_TOOL | 
 
 idCVar r_useCAS(					"r_useCAS",						"0",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_BOOL, "Enables Contrast Adaptive Sharpening." );
 
+idCVar r_useEdgeAA(					"r_useEdgeAA",					"0",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_INTEGER, "Enable edge anti-aliasing: 1 = RGB edge AA; 2 = FXAA" );
+idCVar r_edgeAASampleScale(			"r_edgeAASampleScale",			"1.0",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_FLOAT, "Set the sample offset scale for edge detection" );
+idCVar r_edgeAAFilterScale(			"r_edgeAAFilterScale",			"1.0",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_FLOAT, "Set the filter offset scale for blurring" );
 
 // -------------------------------------	
 //	Player Ability related CVars
 // -------------------------------------
 
-idCVar r_useEdgeAA(					"r_useEdgeAA",					"0",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_INTEGER, "Enable edge anti-aliasing: 1 = RGB edge AA; 2 = FXAA" );
-idCVar r_edgeAASampleScale(			"r_edgeAASampleScale",			"1.0",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_FLOAT, "Set the sample offset scale for edge detection" );
-idCVar r_edgeAAFilterScale(			"r_edgeAAFilterScale",			"1.0",					CVAR_RENDERER | CVAR_ARCHIVE | CVAR_FLOAT, "Set the filter offset scale for blurring" );
-
-
 // ability selectors
 idCVar pm_abilityModifierActive(	"pm_ability_active",			"0",					CVAR_GAME | CVAR_ARCHIVE | CVAR_INTEGER, "Changes the active ability modifier\n"
 																												"0 = None\n"
-																												"1 = Tolerance : Take less damage. \n"
+																												"1 = Tolerance (Take less damage) \n"
 																												"2 = Health Regeneration\n"
 																												"3 = Armor Regeneration\n"
 																												"4 = Air Jumps\n" );
@@ -458,15 +456,17 @@ idCVar pm_abilityModifierPassive(	"pm_ability_passive",			"0",					CVAR_GAME | C
 																												"6 = Dash\n");
 // health regeneration
 idCVar pm_healthRegenTime(			"pm_healthRegenTime",			"1",					CVAR_GAME | CVAR_FLOAT, "How often to regenerate health." );
-idCVar pm_healthRegenDelay(			"pm_healthRegenDelay",			"5",					CVAR_GAME | CVAR_INTEGER, "Delay (in seconds) before health starts to regenerate after taking damage." );
+idCVar pm_healthRegenDelay(			"pm_healthRegenDelay",			"5",					CVAR_GAME | CVAR_FLOAT, "Delay (in seconds) before health starts to regenerate after taking damage." );
 idCVar pm_healthRegenAmount(		"pm_healthRegenAmount",			"1",					CVAR_GAME | CVAR_INTEGER, "How much health to regenerate per pm_healthRegenTime." );
-idCVar pm_healthRegenLimit(			"pm_healthRegenLimit",			"100",					CVAR_GAME | CVAR_INTEGER, "Total amount of health that can be regenerated." );
-idCVar pm_healthRegenSteps(			"pm_healthRegenSteps",			"4",					CVAR_GAME | CVAR_INTEGER, "Splits pm_healthRegenLimit into n number of steps. Value of 1 or less will turn steps off.\nexample1: if pm_healthRegenLimit == 100 && pm_healthRegenSteps == 4, health regeneration will stop at 25/50/75/100\nexample2: if pm_healthRegenLimit == 50 && pm_healthRegenSteps == 5, health regeneration will stop at 10/20/30/40/50." );
-// <---sikk
+idCVar pm_healthRegenSteps(			"pm_healthRegenSteps",			"4",					CVAR_GAME | CVAR_INTEGER, "Splits player's maxHealth into an number of steps. Value of 1 or less will turn steps off.\nexample1: if maxHealth == 100 && pm_healthRegenSteps == 4, health regeneration will stop at 25/50/75/100\nexample2: if maxHealth == 50 && pm_healthRegenSteps == 5, health regeneration will stop at 10/20/30/40/50." );
 
+// armor regeneration
+idCVar pm_armorRegenTime(			"pm_armorRegenTime",			"1",					CVAR_GAME | CVAR_FLOAT, "How often to regenerate armor." );
+idCVar pm_armorRegenDelay(			"pm_armorRegenDelay",			"5",					CVAR_GAME | CVAR_FLOAT, "Delay (in seconds) before armor starts to regenerate after taking damage." );
+idCVar pm_armorRegenAmount(			"pm_armorRegenAmount",			"1",					CVAR_GAME | CVAR_INTEGER, "How much armor to regenerate per pm_healthRegenTime." );
+idCVar pm_armorRegenSteps(			"pm_armorRegenSteps",			"2",					CVAR_GAME | CVAR_INTEGER, "Splits player's maxHealth into an number of steps. Value of 1 or less will turn steps off.\nexample1: if maxHealth == 100 && pm_healthRegenSteps == 4, health regeneration will stop at 25/50/75/100\nexample2: if maxHealth == 50 && pm_healthRegenSteps == 5, health regeneration will stop at 10/20/30/40/50." );
 
 // air jumping
-idCVar pm_airJumps(					"pm_airJumps",					"1",					CVAR_GAME | CVAR_INTEGER, "How many air jumps can be performed." );
 idCVar pm_airJumpVelocity(			"pm_airJumpVelocity",			"3.5",					CVAR_GAME | CVAR_FLOAT,	"Velocity multiplier for air jumps." );
 
 // dashing
