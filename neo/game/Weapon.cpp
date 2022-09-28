@@ -92,7 +92,7 @@ const idEventDef EV_Weapon_StartWeaponLight( "startWeaponLight", "s" );
 const idEventDef EV_Weapon_StopWeaponLight( "stopWeaponLight", "s" );
 
 // DentonMod Events
-const idEventDef EV_Weapon_ChangeProjectileDef( "changeProjectileDef" , "d", 'f' ); 
+const idEventDef EV_Weapon_SetProjectileDef( "setProjectileDef" , "d", 'f' ); 
 const idEventDef EV_Weapon_GetProjectileType( "getProjectileType", NULL, 'f' );
 const idEventDef EV_Weapon_SetZoom( "setZoom" , "d" ); 
 
@@ -149,7 +149,7 @@ CLASS_DECLARATION( idAnimatedEntity, idWeapon )
 	EVENT( EV_Weapon_StopWeaponLight,			idWeapon::Event_StopWeaponLight )
 
 	EVENT( EV_Weapon_SetZoom,					idWeapon::Event_SetZoom )
-	EVENT( EV_Weapon_ChangeProjectileDef,		idWeapon::Event_ChangeProjectileDef )
+	EVENT( EV_Weapon_SetProjectileDef,			idWeapon::Event_SetProjectileDef )
 	EVENT( EV_Weapon_GetProjectileType,			idWeapon::Event_GetProjectileType )
 END_CLASS
 
@@ -635,7 +635,7 @@ void idWeapon::Restore( idRestoreGame *savefile ) {
 	savefile->ReadObject( reinterpret_cast<idClass*&>( projectileEnt ) );
 
 	// DentonMod --->
-	if ( !ChangeProjectileDef( owner->GetProjectileType() ) ) {	// If restore fails we must clear the dict
+	if ( !SetProjectileDef( owner->GetProjectileType() ) ) {	// If restore fails we must clear the dict
 		projectileDict.Clear();
 	}
 	// <---
@@ -1198,7 +1198,7 @@ void idWeapon::GetWeaponDef( const char *objectname, int ammoinclip ) {
 	spawnArgs = weaponDef->dict;
 
 	projectileDict.Clear();
-	ChangeProjectileDef( owner->GetProjectileType() );
+	SetProjectileDef( owner->GetProjectileType() );
 
 	shader = spawnArgs.GetString( "snd_hum" );
 	if ( shader != NULL && *shader != '\0' ) {
@@ -3685,10 +3685,10 @@ void idWeapon::Event_LaunchProjectiles( int num_projectiles, float spread, float
 				ent->fl.networkSync = false;
 			}
 			
-			if ( barrelLaunch ){
+			if ( barrelLaunch ) {
 				launch_pos = muzzle_pos;		
 			}
-			proj = static_cast<idProjectile *>( ent );
+			proj = static_cast<idProjectile*>( ent );
 			proj->Create( owner, launch_pos, dir );
 
 				// make sure the projectile starts inside the bounding box of the owner
@@ -3932,10 +3932,10 @@ void idWeapon::Event_LaunchPowerup( const char *powerup, float duration, int use
 // DentonMod --->
 /*
 =====================
-idWeapon::ChangeProjectilDef
+idWeapon::SetProjectilDef
 ======================
 */
-bool idWeapon::ChangeProjectileDef( int number ) {
+bool idWeapon::SetProjectileDef( int number ) {
 	if ( projectileEnt != NULL ) {
 		gameLocal.Printf( "Projectile Entity exists \n" );
 		return false;
@@ -3956,7 +3956,7 @@ bool idWeapon::ChangeProjectileDef( int number ) {
 		const char *spawnclass = projectileDef->dict.GetString( "spawnclass" );
 		idTypeInfo *cls = idClass::GetClass( spawnclass );
 		if ( !cls || !cls->IsType( idProjectile::Type ) ) {
-			gameLocal.Warning( "Invalid spawnclass in Event_ChangeProjectileDef.\n" );
+			gameLocal.Warning( "Invalid spawnclass in Event_SetProjectileDef.\n" );
 		} else {
 			projectileDict = projectileDef->dict;
 			owner->SetProjectileType( number );
@@ -3987,15 +3987,15 @@ bool idWeapon::ChangeProjectileDef( int number ) {
 
 /*
 =====================
-idWeapon::Event_ChangeProjectileDef
+idWeapon::Event_SetProjectileDef
 ======================
 */
-void idWeapon::Event_ChangeProjectileDef( int number ) {
+void idWeapon::Event_SetProjectileDef( int number ) {
 	if ( number == owner->GetProjectileType() ) {
 		idThread::ReturnFloat( 1 );
 	}
 
-	idThread::ReturnFloat( ChangeProjectileDef( number ) ? 1 : 0 );	
+	idThread::ReturnFloat( SetProjectileDef( number ) ? 1 : 0 );	
 }
 
 /*
@@ -4092,7 +4092,7 @@ void idWeapon::Event_StartWeaponLight( const char* lightName ) {
 		light->light.shaderParms[ SHADERPARM_TIMEOFFSET ]	= -MS2SEC( gameLocal.time );
 		light->light.shaderParms[ SHADERPARM_DIVERSITY ]	= renderEntity.shaderParms[ SHADERPARM_DIVERSITY ];
 
-		if ( !light->lightFlags.isAlwaysOn ){
+		if ( !light->lightFlags.isAlwaysOn ) {
 			light->endTime += light->startTime;
 		}
 	}
@@ -4346,7 +4346,7 @@ idWeapon::Event_StartZoom
 ===============
 */
 void idWeapon::Event_SetZoom( int status ) {
-	if ( status ){
+	if ( status ) {
 		owner->SetWeaponZoom( true );
 	} else {
 		owner->SetWeaponZoom( false );

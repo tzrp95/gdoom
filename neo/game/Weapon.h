@@ -392,7 +392,7 @@ private:
 	void					InitWeaponFx( void );
 	void					StopWeaponFx( void );		
 	void					UpdateWeaponFx( void );
-	bool					ChangeProjectileDef( int number ); 
+	bool					SetProjectileDef( int number ); 
 	// <---
 
 	// script events
@@ -447,7 +447,7 @@ private:
 
 	void					Event_SetZoom( int status );
 	void					Event_GetProjectileType( void );
-	void					Event_ChangeProjectileDef( int number );
+	void					Event_SetProjectileDef( int number );
 
 	idGrabber				grabber;
 	int						grabberState;
